@@ -1,0 +1,203 @@
+import json
+import urllib.parse
+import boto3
+from botocore.exceptions import ClientError
+import logging
+import os
+import sys
+import pymysql
+
+# Set logging levels
+logger = logging.getLogger()
+logger.setLevel(
+    logging.DEBUG)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+
+def get_database_credentials():
+    """Reads the Lambda environment variables to get the RDS database
+    credentials.
+    """
+
+    try:
+        user = os.environ["DB_USER_NAME"]
+        pwd = os.environ["DB_PASSWORD"]
+        host = os.environ["RDS_PROXY_HOST"]
+        db = os.environ["DB_NAME"]
+    except KeyError as e:
+        logger.error(
+            f"ERROR: Could not retrieve database credentials from environment variables. {repr(e):s}.")
+        return (None, None, None, None)
+
+    logger.info(
+        "SUCCESS: Found database credentials in environment variables.")
+    return (user, pwd, host, db)
+
+
+# Get database credentials
+user_name, password, rds_proxy_host, db_name = get_database_credentials()
+
+
+def connect_to_database(user, pwd, host, db):
+    """Attempts to connects to RDS database. Returns the connection object if
+    succesful. Returns None if unsuccessful"""
+
+    # logging.debug("DEBUG: Skipping database connection attempt.")
+    # return None
+
+    try:
+        connection = pymysql.connect(host=host, user=user, passwd=pwd, db=db,
+                                     connect_timeout=5)
+    except pymysql.MySQLError as e:
+        logger.error(
+            "ERROR: Unexpected error: Could not connect to MySQL instance.")
+        logger.error(e)
+        return None
+
+    logger.info("SUCCESS: Connection to RDS for MySQL instance succeeded.")
+    return connection
+
+
+# Connect to database
+if user_name is not None:
+    logger.debug("DEBUG: user_name is not None")
+    conn = connect_to_database(user_name, password, rds_proxy_host, db_name)
+else:
+    conn = None
+
+
+def create_s3_client():
+    logger.info("Attempting to create a boto3 S3 client.")
+    try:
+        s3_client = boto3.client("s3")
+    except Exception as e:
+        logger.error("ERROR: Failed to create a boto3 S3 client.")
+        logger.error(e)
+        return None
+
+    logger.info("SUCCESS: Created boto3 S3 client.")
+    return s3_client
+
+
+logger.debug("DEBUG: Skipping creating s3 client.")
+
+
+# s3 = create_s3_client()
+
+
+def lambda_handler(event, context):
+    """This function reads data from an S3 bucket and writes the data to the
+    database.
+    """
+    global conn  # this variable can get updated in the lambda_handler function
+    global s3
+
+    logging.info("Received event: " + json.dumps(event, indent=2))
+
+    if user_name is None:
+        return 502
+
+    logger.debug("DEBUG: Skipping connection check.")
+    if False:
+        if conn is None:
+            logger.warning(
+                "WARNING: Database connection doesn't exist. Attempting to reconnect to database.")
+            conn = connect_to_database(user_name, password, rds_proxy_host,
+                                       db_name)
+            if conn is None:
+                logger.error("ERROR: Couldn't reconnect to database.")
+                return 502
+            else:
+                logger.info("SUCCESS: Reconnected to database successfully.")
+
+    logger.debug("DEBUG: Skipping s3 bucket extraction.")
+    # logger.info("Extracting bucket info from event record.")
+    # try:
+    #     # Get the object from the event and show its content type
+    #     bucket = event['Records'][0]['s3']['bucket']['name']
+    #     # Get the filename
+    #     key = urllib.parse.unquote_plus(
+    #         event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    # except KeyError as e:
+    #     logger.error(
+    #         "ERROR: Invalid record in event. Make sure the lambda_handler is triggered from an S3 upload.")
+    #     logger.error(e)
+    # logger.info("SUCCESS: Parsed record in event successfully.")
+
+    # if s3 is None:
+    #     logger.warning(
+    #         "WARNING: s3 boto3 client doesn't exist. Attempting to recreate client.")
+    #     s3 = create_s3_client()
+    #     if s3 is None:
+    #         logger.error("ERROR: Failed to recreate s3 client.")
+    #         return 502
+    #     else:
+    #         logger.info("SUCCESS: Recreated s3 client successfully.")
+
+    # logger.info(f"Attempting to get object {key} from bucket {bucket}.")
+    # try:
+    #     response = s3.get_object(Bucket=bucket, Key=key)
+    # except Exception as e:
+    #     logger.error(
+    #         f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
+    #     logger.error(e)
+    #     return 502
+    # logger.info("SUCCESS: Retrieved object successfully.")
+    # logger.info(f"CONTENT TYPE: {response['ContentType']}")
+
+    # return 0
+
+    # TODO: read data from S3 bucket
+    packets = [
+        ("ff:ff:ff:ff:ff:ff", "ABCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:47",
+         271, 50, 3, 405000000, -1050000000),
+        ("ff:ff:ff:ff:ff:ee", "QBCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:49",
+         273, 45, 5, 406000000, -1053000000),
+        ]
+
+    id_table_name = "Identification"
+    data_table_name = "DataStorage"
+
+    item_count = 0
+    with conn.cursor() as cur:
+
+        # Add data from packets to database
+        for pkt in packets:
+            src_addr = pkt[0]  # TODO: change
+            id = pkt[1]  # TODO: change
+            timestamp = pkt[2]  # TODO: change
+            heading = pkt[3]
+            ground_speed = pkt[4]
+            vertical_speed = pkt[5]
+            lat = pkt[6]
+            lon = pkt[7]
+
+            sql_string = f"INSERT INTO {id_table_name:s}(sourceAddress, IDNumber, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
+            logging.debug(f"SQL QUERY: {sql_string}")
+            cur.execute(sql_string)
+
+            sql_string = f"INSERT INTO {data_table_name:s}(sourceAddress, IDNumber, dateAndTime, direction, speed, vspeed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
+            logging.debug(f"SQL QUERY: {sql_string}")
+            cur.execute(sql_string)
+
+            cur.execute("SET SQL_SAFE_UPDATES=0;")  # Disable safe updates
+            sql_string = f"UPDATE {id_table_name:s} SET lastTime='{timestamp:s}' WHERE '{timestamp:s}' > (SELECT lastTime FROM {id_table_name:s} WHERE sourceAddress='{src_addr:s}');"
+            logging.debug(f"SQL QUERY: {sql_string}")
+            cur.execute(sql_string)
+            cur.execute("SET SQL_SAFE_UPDATES=1;")  # Enable safe updates
+
+        conn.commit()
+
+        # Log items that were added
+        cur.execute(f"SELECT * FROM {id_table_name:s}")
+        logger.info("The following items have been added to the database:")
+        for row in cur:
+            item_count += 1
+            logger.info(row)
+    conn.commit()
+
+    conn.close()
+
+    return {
+        "StatusCode": 200,
+        "Body": json.dumps(f"Added {item_count:d} items to the database")
+    }
