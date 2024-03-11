@@ -10,7 +10,7 @@ import pymysql
 # Set logging levels
 logger = logging.getLogger()
 logger.setLevel(
-    logging.INFO)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    logging.DEBUG)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 
 def get_database_credentials():
@@ -130,7 +130,6 @@ def lambda_handler(event, context):
         logger.error(e)
     logger.info("SUCCESS: Parsed record in event successfully.")
 
-
     logger.info(f"Attempting to get object {key} from bucket {bucket}.")
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
@@ -150,12 +149,31 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error("Error decoding file")
         logger.error(e)
-    users = file_reader.split("\n")
-    users = list(filter(None, users))
+
+    rows = file_reader.split("\n")
+    rows = list(filter(None, rows))
     packets = []
-    for user in users:
-        user_data = user.split(",")
-        packets.append((user_data[0], user_data[1], user_data[2], user_data[3], user_data[4], user_data[5], user_data[6], user_data[7]))
+    first_row = True
+    for row in rows:
+        if first_row:
+            first_row = False
+            continue
+        user_data = row.replace('\r', '').split(",")
+        logger.info(f"Creating packet from data: {user_data}")
+        src_addr = user_data[0]
+        id = user_data[1]
+        timestamp = user_data[2]
+        heading = int(user_data[3])
+        ground_speed = int(user_data[4])
+        vertical_speed = int(user_data[5])
+        lat = int(user_data[6])
+        lon = int(user_data[7])
+
+        packet = (
+        src_addr, id, timestamp, heading, ground_speed, vertical_speed, lat,
+        lon)
+        logger.info(f"Appending packet: {packet}")
+        packets.append(packet)
 
     id_table_name = "drone_list"
     data_table_name = "remoteid_packets"
@@ -175,16 +193,19 @@ def lambda_handler(event, context):
             lon = pkt[7]
 
             sql_string = f"INSERT INTO {id_table_name:s}(src_addr, unique_id, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
-            logging.debug(f"SQL QUERY: {sql_string}")
+            logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
             except pymysql.err.IntegrityError as e:
                 logger.warning("WARNING: MySQL IntegrityError")
                 logger.warning(e)
-            # TODO: except loss of connecyion "errorMessage": "(0, '')", "errorType": "InterfaceError",
+            except pymysql.err.OperationalError as e:
+                logger.error("ERROR: MySQL OperationalError")
+                logger.error(e)
+            # TODO: except loss of connection "errorMessage": "(0, '')", "errorType": "InterfaceError",
 
             sql_string = f"INSERT INTO {data_table_name:s}(src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
-            logging.debug(f"SQL QUERY: {sql_string}")
+            logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
             except pymysql.err.IntegrityError as e:
@@ -192,8 +213,8 @@ def lambda_handler(event, context):
                 logger.warning(e)
 
             cur.execute("SET SQL_SAFE_UPDATES=0;")  # Disable safe updates
-            sql_string = f"UPDATE {id_table_name:s} SET lastTime='{timestamp:s}' WHERE '{timestamp:s}' > (SELECT lastTime FROM {id_table_name:s} WHERE sourceAddress='{src_addr:s}');"
-            logging.debug(f"SQL QUERY: {sql_string}")
+            sql_string = f"UPDATE {id_table_name:s} SET lastTime='{timestamp:s}' WHERE '{timestamp:s}' > (SELECT lastTime FROM {id_table_name:s} WHERE src_addr='{src_addr:s}');"
+            logging.info(f"SQL QUERY: {sql_string}")
             cur.execute(sql_string)
             cur.execute("SET SQL_SAFE_UPDATES=1;")  # Enable safe updates
 
