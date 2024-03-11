@@ -134,11 +134,6 @@ def lambda_handler(event, context):
     logger.info(f"Attempting to get object {key} from bucket {bucket}.")
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
-        file_reader = response['Body'].read().decode("utf-8")
-        users = file_reader.split("\n")
-        users = list(filter(None, users))
-        
-            
     except Exception as e:
         logger.error(
             f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
@@ -150,13 +145,20 @@ def lambda_handler(event, context):
     logger.info("SUCCESS: Retrieved object successfully.")
     logger.info(f"CONTENT TYPE: {response['ContentType']}")
 
+    try:
+        file_reader = response['Body'].read().decode("utf-8")
+    except Exception as e:
+        logger.error("Error decoding file")
+        logger.error(e)
+    users = file_reader.split("\n")
+    users = list(filter(None, users))
+    packets = []
     for user in users:
         user_data = user.split(",")
-        # TODO: read data from S3 bucket
         packets.append((user_data[0], user_data[1], user_data[2], user_data[3], user_data[4], user_data[5], user_data[6], user_data[7]))
 
-    id_table_name = "Identification"
-    data_table_name = "DataStorage"
+    id_table_name = "drone_list"
+    data_table_name = "remoteid_packets"
 
     item_count = 0
     with conn.cursor() as cur:
@@ -172,7 +174,7 @@ def lambda_handler(event, context):
             lat = pkt[6]
             lon = pkt[7]
 
-            sql_string = f"INSERT INTO {id_table_name:s}(sourceAddress, IDNumber, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
+            sql_string = f"INSERT INTO {id_table_name:s}(src_addr, unique_id, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
             logging.debug(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
@@ -181,7 +183,7 @@ def lambda_handler(event, context):
                 logger.warning(e)
             # TODO: except loss of connecyion "errorMessage": "(0, '')", "errorType": "InterfaceError",
 
-            sql_string = f"INSERT INTO {data_table_name:s}(sourceAddress, IDNumber, dateAndTime, direction, speed, vspeed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
+            sql_string = f"INSERT INTO {data_table_name:s}(src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
             logging.debug(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
