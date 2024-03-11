@@ -134,6 +134,11 @@ def lambda_handler(event, context):
     logger.info(f"Attempting to get object {key} from bucket {bucket}.")
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
+        file_reader = response['Body'].read().decode("utf-8")
+        users = file_reader.split("\n")
+        users = list(filter(None, users))
+        
+            
     except Exception as e:
         logger.error(
             f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
@@ -145,12 +150,10 @@ def lambda_handler(event, context):
     logger.info("SUCCESS: Retrieved object successfully.")
     logger.info(f"CONTENT TYPE: {response['ContentType']}")
 
-
-    # TODO: read data from S3 bucket
-    packets = [ \
-        ("ff:ff:ff:ff:ff:ff", "ABCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:47", 271, 50, 3, 405000000, -1050000000), \
-        ("ff:ff:ff:ff:ff:ee", "QBCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:49", 273, 45, 5, 406000000, -1053000000) \
-        ]
+    for user in users:
+        user_data = user.split(",")
+        # TODO: read data from S3 bucket
+        packets.append((user_data[0], user_data[1], user_data[2], user_data[3], user_data[4], user_data[5], user_data[6], user_data[7]))
 
     id_table_name = "Identification"
     data_table_name = "DataStorage"
