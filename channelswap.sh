@@ -15,7 +15,8 @@ else
     exit 1
 fi
 
-all_wifi_channels=( {1..14} {32..68..4} {96..144..4} {149..177..4} )
+# all_wifi_channels=( {1..14} {32..68..4} {96..144..4} {149..177..4} )
+all_wifi_channels=({1} {6} {11} {36} {40} {44} {48} {149} {153} {157} {161})
 
 # Use MAC address on the back of the network card adapter
 MAC_addr=00c0cab400dd
