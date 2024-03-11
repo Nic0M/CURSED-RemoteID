@@ -43,7 +43,7 @@ for channel in "${all_wifi_channels[@]}"
 do
     echo "Scanning channel: $channel"
     sudo airmon-ng start wlan1mon "$channel"
-    sleep 0.2
+    sleep $(5/11)
 done
 
 # Kill tshark process
