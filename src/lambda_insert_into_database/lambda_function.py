@@ -10,7 +10,7 @@ import pymysql
 # Set logging levels
 logger = logging.getLogger()
 logger.setLevel(
-    logging.DEBUG)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    logging.INFO)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 
 def get_database_credentials():
@@ -21,7 +21,7 @@ def get_database_credentials():
     try:
         user = os.environ["DB_USER_NAME"]
         pwd = os.environ["DB_PASSWORD"]
-        host = os.environ["RDS_PROXY_HOST"]
+        host = os.environ["RDS_HOST"]
         db = os.environ["DB_NAME"]
     except KeyError as e:
         logger.error(
@@ -78,10 +78,9 @@ def create_s3_client():
     return s3_client
 
 
-logger.debug("DEBUG: Skipping creating s3 client.")
-
-
-# s3 = create_s3_client()
+# logger.debug("DEBUG: Skipping creating s3 client.")
+logger.info("Creating S3 boto client.")
+s3 = create_s3_client()
 
 
 def lambda_handler(event, context):
@@ -96,62 +95,61 @@ def lambda_handler(event, context):
     if user_name is None:
         return 502
 
-    logger.debug("DEBUG: Skipping connection check.")
-    if False:
+    if conn is None or not conn.open:
+        logger.warning(
+            "WARNING: Database connection doesn't exist. Attempting to reconnect to database.")
+        conn = connect_to_database(user_name, password, rds_proxy_host,
+                                   db_name)
         if conn is None:
-            logger.warning(
-                "WARNING: Database connection doesn't exist. Attempting to reconnect to database.")
-            conn = connect_to_database(user_name, password, rds_proxy_host,
-                                       db_name)
-            if conn is None:
-                logger.error("ERROR: Couldn't reconnect to database.")
-                return 502
-            else:
-                logger.info("SUCCESS: Reconnected to database successfully.")
+            logger.error("ERROR: Couldn't reconnect to database.")
+            return 502
+        else:
+            logger.info("SUCCESS: Reconnected to database successfully.")
 
-    logger.debug("DEBUG: Skipping s3 bucket extraction.")
-    # logger.info("Extracting bucket info from event record.")
-    # try:
-    #     # Get the object from the event and show its content type
-    #     bucket = event['Records'][0]['s3']['bucket']['name']
-    #     # Get the filename
-    #     key = urllib.parse.unquote_plus(
-    #         event['Records'][0]['s3']['object']['key'], encoding='utf-8')
-    # except KeyError as e:
-    #     logger.error(
-    #         "ERROR: Invalid record in event. Make sure the lambda_handler is triggered from an S3 upload.")
-    #     logger.error(e)
-    # logger.info("SUCCESS: Parsed record in event successfully.")
+    if s3 is None:
+        logger.warning(
+            "WARNING: s3 boto3 client doesn't exist. Attempting to recreate client.")
+        s3 = create_s3_client()
+        if s3 is None:
+            logger.error("ERROR: Failed to recreate s3 client.")
+            return 502
+        else:
+            logger.info("SUCCESS: Recreated s3 client successfully.")
 
-    # if s3 is None:
-    #     logger.warning(
-    #         "WARNING: s3 boto3 client doesn't exist. Attempting to recreate client.")
-    #     s3 = create_s3_client()
-    #     if s3 is None:
-    #         logger.error("ERROR: Failed to recreate s3 client.")
-    #         return 502
-    #     else:
-    #         logger.info("SUCCESS: Recreated s3 client successfully.")
+    # logger.debug("DEBUG: Skipping s3 bucket extraction.")
+    logger.info("Extracting bucket info from event record.")
+    try:
+        # Get the object from the event and show its content type
+        bucket = event['Records'][0]['s3']['bucket']['name']
+        # Get the filename
+        key = urllib.parse.unquote_plus(
+            event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    except KeyError as e:
+        logger.error(
+            "ERROR: Invalid record in event. Make sure the lambda_handler is triggered from an S3 upload.")
+        logger.error(e)
+    logger.info("SUCCESS: Parsed record in event successfully.")
 
-    # logger.info(f"Attempting to get object {key} from bucket {bucket}.")
-    # try:
-    #     response = s3.get_object(Bucket=bucket, Key=key)
-    # except Exception as e:
-    #     logger.error(
-    #         f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
-    #     logger.error(e)
-    #     return 502
-    # logger.info("SUCCESS: Retrieved object successfully.")
-    # logger.info(f"CONTENT TYPE: {response['ContentType']}")
 
-    # return 0
+    logger.info(f"Attempting to get object {key} from bucket {bucket}.")
+    try:
+        response = s3.get_object(Bucket=bucket, Key=key)
+    except Exception as e:
+        logger.error(
+            f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
+        logger.error(e)
+        return {
+            "StatusCode": 502,
+            "Body": "Failed to get object from bucket."
+        }
+    logger.info("SUCCESS: Retrieved object successfully.")
+    logger.info(f"CONTENT TYPE: {response['ContentType']}")
+
 
     # TODO: read data from S3 bucket
-    packets = [
-        ("ff:ff:ff:ff:ff:ff", "ABCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:47",
-         271, 50, 3, 405000000, -1050000000),
-        ("ff:ff:ff:ff:ff:ee", "QBCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:49",
-         273, 45, 5, 406000000, -1053000000),
+    packets = [ \
+        ("ff:ff:ff:ff:ff:ff", "ABCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:47", 271, 50, 3, 405000000, -1050000000), \
+        ("ff:ff:ff:ff:ff:ee", "QBCDEFGHIJKLMNOPQRST", "2024-03-09 00:26:49", 273, 45, 5, 406000000, -1053000000) \
         ]
 
     id_table_name = "Identification"
@@ -173,11 +171,20 @@ def lambda_handler(event, context):
 
             sql_string = f"INSERT INTO {id_table_name:s}(sourceAddress, IDNumber, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
             logging.debug(f"SQL QUERY: {sql_string}")
-            cur.execute(sql_string)
+            try:
+                cur.execute(sql_string)
+            except pymysql.err.IntegrityError as e:
+                logger.warning("WARNING: MySQL IntegrityError")
+                logger.warning(e)
+            # TODO: except loss of connecyion "errorMessage": "(0, '')", "errorType": "InterfaceError",
 
             sql_string = f"INSERT INTO {data_table_name:s}(sourceAddress, IDNumber, dateAndTime, direction, speed, vspeed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
             logging.debug(f"SQL QUERY: {sql_string}")
-            cur.execute(sql_string)
+            try:
+                cur.execute(sql_string)
+            except pymysql.err.IntegrityError as e:
+                logger.warning("WARNING: MySQL IntegrityError")
+                logger.warning(e)
 
             cur.execute("SET SQL_SAFE_UPDATES=0;")  # Disable safe updates
             sql_string = f"UPDATE {id_table_name:s} SET lastTime='{timestamp:s}' WHERE '{timestamp:s}' > (SELECT lastTime FROM {id_table_name:s} WHERE sourceAddress='{src_addr:s}');"
@@ -189,13 +196,11 @@ def lambda_handler(event, context):
 
         # Log items that were added
         cur.execute(f"SELECT * FROM {id_table_name:s}")
-        logger.info("The following items have been added to the database:")
+        logger.info("The following items are in the database:")
         for row in cur:
             item_count += 1
             logger.info(row)
     conn.commit()
-
-    conn.close()
 
     return {
         "StatusCode": 200,
