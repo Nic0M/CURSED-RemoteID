@@ -17,7 +17,7 @@ def setup_logging(root_level=logging.DEBUG):
     # Timestamp format: year-month-day timezone hour:minute:second.milliseconds
     # Example: 2024-03-08 UTC-0700 11:41:54.587  __main__    [ERROR] error msg
     formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)d  %(name)-15s  [%(levelname)s] %(message)s",
+        "%(asctime)s.%(msecs)3d  %(name)-15s  [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d UTC%z %H:%M:%S")
 
     # Create a stream handler log ERROR or above to the console
@@ -37,13 +37,15 @@ def setup_logging(root_level=logging.DEBUG):
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
+    root_logger.info(f"Root logger setup with logging level {root_level}.")
+
 
 def logging_test():
-    logger.debug("This is a debug message test.")
-    logger.info("This is an info message test.")
-    logger.warning("This is a warning message test.")
-    logger.error("This is an error message test.")
-    logger.critical("This is critical message test.")
+    logger.debug("This is a debug message test and can be safely ignored.")
+    logger.info("This is an info message test and can be safely ignored.")
+    logger.warning("This is a warning message test and can be safely ignored.")
+    logger.error("This is an error message test and can be safely ignored.")
+    logger.critical("This is critical message test and can be safely ignored.")
 
 
 def main():
