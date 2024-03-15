@@ -25,7 +25,7 @@ def main():
     MAC_addr = "00c0cab400dd"
 
     long_interface_name = f"wlx{MAC_addr}"
-    short_interface_name = 'wlan1mon'
+    short_interface_name = 'wlan1'
 
     print(f"Long Interface Name: {long_interface_name}")
     print(f"Short Interface Name: {short_interface_name}")
@@ -66,27 +66,28 @@ def main():
 
     initial_detection = True
     
-    # This section loops through the WiFi Channels.It scans channels 1, 6, and 11 for 0.5
+    # This section loops through the WiFi Channels. It scans channels 1, 6, and 11 for 0.5
     # seconds each, scans 4  of the 5Ghz for 0.25 seconds each, returns to the 2.4 GHz channels
     # again for 0.5 seconds each, and then scans the last 4 5GHz channels for 0.25 seconds each.
-    # This 5 second scanning patern then repeats'''
+    # This 5 second scanning pattern then repeats'''
     
     while initial_detection:
         
         for channel in wifi_channel_list:
-            # TODO: switch to channel
-            # TODO: add sudo capability
-            # TODO: add dict so not doing string conversion
-            print(["airmon-ng", "start", "wlan1mon", channel])
-            print(f'Scanning Channel: {channel}')
-
+            
+            command = ["airmon-ng", "start", "wlan1mon", channel]
+            # Run the command
+            try:
+                subprocess.run(command, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error: {e}")
+                
             if channel == '1' or channel == '6' or channel == '11':
-                time.sleep(5)
+                time.sleep(0.5)
                 #print('sleep for 5 s')
             else:
-                time.sleep(2)
+                time.sleep(0.25)
                 #print('sleep for 2 s')
-
 
     # TODO: end packet capture
 
