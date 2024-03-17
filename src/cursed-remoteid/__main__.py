@@ -4,6 +4,7 @@ import threading
 import queue
 import os
 import pyshark
+import subprocess
 
 # Local files
 import setup_logging
@@ -13,7 +14,32 @@ import helpers
 
 
 def packet_logger():
-    pass
+
+    interface_name = "wlan1mon"
+    interface_name = "wlan1"
+
+    # Gets a list of supported channels separated by new lines
+    get_channels_cmd = f"iw phy {interface_name} channels 2>&1" + \
+                       r" | awk -F'[][]' '$2{print $2}'"
+    logger.debug(f"Running command: {get_channels_cmd}")
+    output = subprocess.check_output(get_channels_cmd, shell=True, text=True)
+    supported_channels = output.strip().split('\n')
+
+    channel = supported_channels[0]
+
+    set_channel_cmd = f"iw dev {interface_name} set channel {channel} 2>&1"
+    logger.debug(f"Running command: {set_channel_cmd}")
+    output = subprocess.check_output(set_channel_cmd, shell=True, text=True)
+    if output != "":
+        logger.error(f"Failed to switch to channel {channel}.")
+        if "(-16)" in output:
+            logger.error(f"Interface {interface_name} is likely no longer in "
+                         f"monitor mode.")
+        if "(-22)" in output:
+            logger.error(f"Channel {channel} cannot be legally used.")
+        logger.error(output)
+    else:
+        logger.info(f"Switched to channel {channel} successfully.")
 
 
 def uploader(file_queue, bucket_name, remove_files, max_error_count,
@@ -105,10 +131,10 @@ def main():
                                        )
 
     csv_writer_thread.start()
-    # uploader_thread.start()
+    uploader_thread.start()
 
     csv_writer_thread.join()
-    # uploader_thread.join()
+    uploader_thread.join()
     return 0
 
 

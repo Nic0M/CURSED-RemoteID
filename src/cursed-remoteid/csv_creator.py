@@ -111,6 +111,9 @@ def create_row(pkt):
     except AttributeError:
         raise InvalidRemoteIDPacketError
 
+    # if lat <= 0 and lon == 0:
+    #     raise InvalidRemoteIDPacketError
+
     row = [src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
            lat, lon]
     return row
