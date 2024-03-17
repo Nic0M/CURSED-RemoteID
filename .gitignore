@@ -1,3 +1,5 @@
 .DS_Store
 *.log
 [Ll]ogs/
+__pycache__/
+/src/lambda_insert_into_database/packages/
