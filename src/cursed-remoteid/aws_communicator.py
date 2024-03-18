@@ -2,10 +2,11 @@ import logging
 import boto3
 from botocore.exceptions import ClientError
 import os
-import time
+import queue
+
+import helpers
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def create_s3_client():
@@ -36,7 +37,8 @@ def create_s3_client():
 
 
 def upload_file(s3_client, file_name, bucket, object_name=None):
-    r"""Upload a file to an S3 bucket. Requires AWS
+    r"""Upload a file to an S3 bucket. Requires AWS credentials setup. See
+    create_s3_client() for details.
 
     :param s3_client: S3 client object
 
@@ -70,15 +72,46 @@ def upload_file(s3_client, file_name, bucket, object_name=None):
     return True
 
 
-def runner():
-    file_name = "../../channelswap.sh"
-    bucket_name = "cursed-remoteid-data"
-    logger.info(f"Attempting to upload file {file_name} to bucket {bucket_name}.")
+def uploader(file_queue, bucket_name, remove_files, max_error_count,
+             csv_writer_exit_event):
 
+    thread_logger = logging.getLogger("uploader-thread")
+    thread_logger.setLevel(logging.INFO)
+
+    thread_logger.info("Creating S3 client.")
     s3_client = create_s3_client()
-    start = time.time_ns()
-    upload_file(s3_client, file_name, bucket_name)
-    end = time.time_ns()
 
-    logger.info(f"Elapsed upload time in milliseconds {(end - start) / 1e6:.1f}")
+    error_count = 0
+    while error_count < max_error_count:
+        # Only block if the csv_writer thread hasn't terminated
+        if not csv_writer_exit_event.is_set():
+            file_name = file_queue.get()  # Blocks if the queue is empty
+        else:
+            try:
+                file_name = file_queue.get(block=False)
+            except queue.Empty:
+                thread_logger.info("Queue is empty and csv_writer has exited")
+                break
+
+        if file_name is None:
+            thread_logger.info("Received termination message from queue.")
+            break
+        if os.path.exists(file_name):
+            uploaded = upload_file(s3_client, file_name, bucket_name)
+            if not uploaded:
+                error_count += 1
+                thread_logger.error(f"Failed to upload file {file_name}. "
+                                    f"Total errors: {error_count}")
+            if remove_files:
+                helpers.safe_remove(file_name)
+        else:
+            error_count += 1
+            thread_logger.error(f"File {file_name} doesn't exist. Cannot "
+                                f"upload the file. Total Errors: "
+                                f"{error_count}.")
+    if error_count >= max_error_count:
+        thread_logger.error(f"Total errors: {error_count} exceeds maximum "
+                            f"allowed errors: {max_error_count}.")
+    thread_logger.info("Terminating thread.")
+    return None
 

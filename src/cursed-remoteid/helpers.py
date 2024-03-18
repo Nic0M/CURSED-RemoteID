@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def safe_remove(file_name):

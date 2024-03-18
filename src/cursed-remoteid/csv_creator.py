@@ -5,38 +5,40 @@ import logging
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 import time
 import queue
-import math
 import re
 
 # Local files
 import helpers
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
-os_name = os.name
-match os_name:
-    case "posix":
-        tmp_directory = PurePosixPath("/var", "tmp")
-    case "nt":
-        tmp_directory = PureWindowsPath("C:", "Users", "AppData", "Local",
-                                        "Temp")
-    case _:
-        logger.error(f"Unknown OS {os_name}. Using current directory to store "
-                     f"temporary files.")
-        tmp_directory = ""
-tmp_directory = Path(tmp_directory, "remote-id-data")
-logger.info(f"Storing temporary files in {tmp_directory}")
-try:
-    tmp_directory.mkdir(parents=True, exist_ok=False)
-except FileExistsError:
-    logger.info(f"Directory already exists, deleting existing files")
-    # If the folder exists, there may be leftover files from a previous run
-    for (dir_name, _, base_names) in os.walk(tmp_directory, followlinks=False):
-        # Delete all files in the tmp directory
-        for base_name in base_names:
-            helpers.safe_remove(PurePath(dir_name, base_name))
-        break  # Don't recursively walk through directories
+
+def clean_tmp_csv_directory():
+    os_name = os.name
+    match os_name:
+        case "posix":
+            tmp_directory = PurePosixPath("/var", "tmp")
+        case "nt":
+            tmp_directory = PureWindowsPath("C:", "Users", "AppData", "Local",
+                                            "Temp")
+        case _:
+            logger.error(f"Unknown OS {os_name}. Using current directory to "
+                         f"store temporary files.")
+            tmp_directory = ""
+    tmp_directory = Path(tmp_directory, "remote-id-data")
+    logger.info(f"Storing temporary files in {tmp_directory}")
+    try:
+        tmp_directory.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        logger.info(f"Directory already exists, deleting existing files")
+        # If the folder exists, there may be leftover files from a previous run
+        for (dir_name, _, base_names) in os.walk(tmp_directory, followlinks=False):
+            # Delete all files in the tmp directory
+            for base_name in base_names:
+                helpers.safe_remove(PurePath(dir_name, base_name))
+            break  # Don't recursively walk through directories
+    return tmp_directory
+
 
 header_row = ["Source Address", "Unique ID", "Timestamp", "Heading",
               "Ground Speed", "Vertical Speed", "Latitude", "Longitude"]
@@ -119,7 +121,7 @@ def create_row(pkt):
     return row
 
 
-def csv_writer(packet_queue, upload_file_queue, exit_event, remove_files,
+def csv_writer(packet_queue, upload_file_queue, exit_event,
                max_packet_count=100,
                max_elapsed_time=300,  # 5 minutes
                max_error_count=10,
@@ -127,6 +129,8 @@ def csv_writer(packet_queue, upload_file_queue, exit_event, remove_files,
                ):
 
     logger.info("Starting thread")
+
+    tmp_directory = clean_tmp_csv_directory()
 
     error_count = 0
     # while error_count < max_error_count:

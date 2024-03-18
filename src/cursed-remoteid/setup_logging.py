@@ -1,10 +1,11 @@
 import logging
 from pathlib import Path
 
-root_logging_level = logging.INFO
+logger = logging.getLogger(__name__)
 
 
-def setup_logging(root_level=logging.DEBUG):
+def setup_logging(root_level=logging.DEBUG, console_level=logging.ERROR,
+                  file_level=logging.INFO, log_file="logs/debug.log"):
     """Configures logging"""
 
     # Set the root logging level. No other loggers can log a message below this
@@ -20,16 +21,18 @@ def setup_logging(root_level=logging.DEBUG):
         "%(asctime)s.%(msecs)3d  %(name)-15s  [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d UTC%z %H:%M:%S")
 
-    # Create a stream handler log ERROR or above to the console
+    # Create a stream handler log CONSOLE_LEVEL or above to the console
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.ERROR)
+    console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)
 
-    # Create a logs directory if it doesn't already exist
-    Path("logs").mkdir(parents=True, exist_ok=True)
+    path = Path(log_file)
+    # Create directory if it doesn't already exist
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # base_name = path.name
     # Create a file handler which logs all the way to DEBUG
-    file_handler = logging.FileHandler("logs/debug.log")
-    file_handler.setLevel(root_level)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)
 
     # Apply the console handler and file handler to the root handler to apply
@@ -46,9 +49,3 @@ def logging_test():
     logger.warning("This is a warning message test and can be safely ignored.")
     logger.error("This is an error message test and can be safely ignored.")
     logger.critical("This is critical message test and can be safely ignored.")
-
-
-setup_logging(root_level=root_logging_level)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
