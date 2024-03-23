@@ -23,28 +23,40 @@ class PacketLogger:
 def packet_logger(wifi_interface_queue,
                   bt_interface_queue,
                   packet_queue,
+                  use_wifi,
+                  use_bt,
                   packet_timeout=900,
                   interface_timeout=60,
                   ):
 
+    interfaces = []
+
     # Wait for Wi-Fi interface to be setup
-    try:
-        wifi_interface = wifi_interface_queue.get(timeout=interface_timeout)
-    except queue.Empty:
-        logger.error("Timed out waiting for Wi-Fi monitor mode interface to "
-                     "setup.")
-        return 1
+    if use_wifi:
+        try:
+            wifi_interface = wifi_interface_queue.get(timeout=interface_timeout)
+        except queue.Empty:
+            logger.error("Timed out waiting for Wi-Fi monitor mode interface "
+                         "to setup.")
+        else:
+            interfaces.append(wifi_interface)
 
     # Wait for Bluetooth interface to be setup
-    try:
-        bt_interface = bt_interface_queue.get(timeout=interface_timeout)
-    except queue.Empty:
-        logger.error("Timed out waiting for Bluetooth monitor mode interface "
-                     "to setup.")
-        return 1
+    if use_bt:
+        try:
+            bt_interface = bt_interface_queue.get(timeout=interface_timeout)
+        except queue.Empty:
+            logger.error("Timed out waiting for Bluetooth monitor mode "
+                         "interface to setup.")
+        else:
+            interfaces.append(bt_interface)
+
+    # Check if interface list is empty
+    if not interfaces:
+        logger.error("No interfaces were set up. Packet logger cannot start.")
+        return None
 
     # Setup live packet capture
-    interfaces = [wifi_interface, bt_interface]
     logger.info(f"Setting up live capture with interfaces: {interfaces}")
     try:
         cap = pyshark.LiveCapture(interface=interfaces,
@@ -72,6 +84,8 @@ def packet_logger(wifi_interface_queue,
 def main(wifi_interface_queue,
          bt_interface_queue,
          packet_queue,
+         use_wifi,
+         use_bt,
          pcap_timeout_event,
          packet_timeout=900,
          interface_timeout=60,
@@ -82,6 +96,8 @@ def main(wifi_interface_queue,
         packet_logger(wifi_interface_queue,
                       bt_interface_queue,
                       packet_queue,
+                      use_wifi,
+                      use_bt,
                       packet_timeout,
                       interface_timeout,
                       )

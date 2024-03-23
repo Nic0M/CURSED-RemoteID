@@ -5,6 +5,7 @@ import threading
 import queue
 import os
 import sys
+import subprocess
 
 # Local files
 import setup_logging
@@ -14,11 +15,77 @@ import channel_swapper
 import packet_logger
 
 
+def all_requirements_installed():
+
+    cli_utilities = ["iw", "airmon-ng", "tshark"]
+    for utility in cli_utilities:
+        logger.info(f"Checking '{utility}' installation.")
+        cmd = ["command", "-v", utility]
+        try:
+            output = subprocess.check_output(cmd)
+        except subprocess.CalledProcessError:
+            logger.error(f"Could not find {utility} command-line utility.")
+            return False
+        logger.info(f"Found '{utility}' at '{output}'")
+
+    # Check if Open Drone ID Wireshark dissector is installed
+    logger.info("Checking Open Drone ID dissector installation.")
+    # List all protocols, find lines with 'opendroneid' case-insensitive
+    # Split fields by tab character (according to tshark manual page)
+    # Get the third field which should be the display filter name
+    # Note: tab character is inserted in by Python, so $'\t' is not needed
+    cmd = "tshark -G protocols | grep -i opendroneid | cut -d '\t' -f 3"
+    try:
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT,
+                                         shell=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running command {cmd}.")
+        logger.error(f"STDOUT: {e.stdout}")
+        return False
+
+    critical_protocols = ["opendroneid",
+                          "opendroneid.basicid",
+                          "opendroneid.location",
+                          "opendroneid.message.pack"]
+    for protocol in critical_protocols:
+        if protocol not in output:
+            logger.error(f"Missing Open Drone ID protocol: {protocol}")
+            return False
+        else:
+            logger.info(f"Found Open Drone ID protocol: {protocol}")
+
+    non_critical_protocols = ["opendroneid.message.authentication",
+                              "opendroneid.message.operatorid",
+                              "opendroneid.message.system",
+                              "opendroneid.message.selfid"]
+    for protocol in non_critical_protocols:
+        if protocol not in output:
+            logger.warning(f"Missing optional protocol: {protocol}")
+        else:
+            logger.info(f"Found optional protocl: {protocol}")
+
+    return True
+
+
 def main():
 
     # Check if script was run with sudo/root permissions
     if os.geteuid() != 0:
-        logger.warning("This script may need to be run with sudo permissions.")
+        logger.warning("This script may need to be run with root permissions.")
+
+    # Check tshark and OpenDroneID installation
+    if not all_requirements_installed():
+        logger.critical("Missing requirements. Exiting...")
+        return 1
+
+    # Check command-line arguments for which wireless interfaces to use
+    use_wifi = not args.disable_wifi
+    use_bt = not args.disable_bt
+
+    if not use_wifi and not use_bt:
+        logger.error("All wireless interfaces have been disabled through "
+                     "command-line arguments. Cannot start scanning.")
+        return 1
 
     # Event to signal low power mode
     sleep_event = threading.Event()
@@ -39,6 +106,8 @@ def main():
                                                     wifi_interface_queue,
                                                     bluetooth_interface_queue,
                                                     channel_queue,
+                                                    use_wifi,
+                                                    use_bt,
                                                     sleep_event
                                                     ),
                                               )
@@ -59,6 +128,8 @@ def main():
                                             args=(wifi_interface_queue,
                                                   bluetooth_interface_queue,
                                                   packet_queue,
+                                                  use_wifi,
+                                                  use_bt,
                                                   pcap_timeout_event,
                                                   sleep_timeout,
                                                   interface_setup_timeout,
@@ -114,6 +185,8 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--log-file", type=str, default="logs/debug.log",
                         help="Log file location. Default is logs/debug.log")
+    parser.add_argument("--disable-wifi", action="store_true")
+    parser.add_argument("--disable-bt", action="store_true")
 
     args = parser.parse_args()
 
@@ -137,6 +210,6 @@ if __name__ == "__main__":
 
     # Set up main script logging
     logger = logging.getLogger(__name__)
-    logger.info("Running main script.")
 
+    logger.info("Running main script.")
     sys.exit(main())

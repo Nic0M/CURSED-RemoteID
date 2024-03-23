@@ -333,46 +333,53 @@ def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
 
 
 def main(mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
-         sleep_event):
+         use_wifi, use_bt, sleep_event):
     """Main entry point for channel selection thread."""
 
     logger.info("Started channel selection thread.")
 
-    # Try to set up Wi-Fi interface
-    try:
-        phy, mon = setup_wifi_interface(mac_addr)
-    except Exception as e:
-        logger.critical(f"Error setting up Wi-Fi interface: {e}")
-        return 1
-    try:
-        wifi_interface_queue.put(mon, block=False)
-    except queue.Full:  # This shouldn't be possible
-        logger.critical("Wi-Fi interface queue is somehow full. Cannot notify"
-                        "other threads of successful setup.")
-        return 1
+    if use_wifi:
+        # Try to set up Wi-Fi interface
+        try:
+            phy, mon = setup_wifi_interface(mac_addr)
+        except Exception as e:
+            logger.critical(f"Error setting up Wi-Fi interface: {e}")
+            return 1
+        try:
+            wifi_interface_queue.put(mon, block=False)
+        except queue.Full:  # This shouldn't be possible
+            logger.critical("Wi-Fi interface queue is somehow full. Cannot "
+                            "notify other threads of successful setup.")
+            return 1
+    else:
+        logger.info("Skipping Wi-Fi setup.")
 
-    # Try to set up Bluetooth interface
-    bt_interface_name = "bluetooth-monitor"  # TODO: add nRF name
-    try:
-        bt_interface_queue.put(bt_interface_name, block=False)
-    except queue.Full:  # This shouldn't be possible
-        logger.critical("Bluetooth interface queue is somehow full. Cannot"
-                        "notify other threads of successful setup.")
-        return 1
+    if use_bt:
+        # Try to set up Bluetooth interface
+        bt_interface_name = "bluetooth-monitor"  # TODO: add nRF name
+        try:
+            bt_interface_queue.put(bt_interface_name, block=False)
+        except queue.Full:  # This shouldn't be possible
+            logger.critical("Bluetooth interface queue is somehow full. Cannot"
+                            "notify other threads of successful setup.")
+            return 1
+    else:
+        logger.info("Skipping Bluetooth setup.")
 
-    logger.info("Set up network interfaces successfully.")
+    logger.info("Set up all enabled network interfaces successfully.")
 
     # Sweep through Wi-Fi channels (Bluetooth channels can all be captured at
     # the same time)
-    logger.info("Attempting to sweeping through Wi-Fi channels...")
-    try:
-        wifi_channel_sweeper(phy, mon, channel_queue, sleep_event)
-    except NoSupportedChannels:
-        logger.critical("No supported channels to sweep through.")
-        return 1
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return 1
+    if use_wifi:
+        logger.info("Attempting to sweeping through Wi-Fi channels...")
+        try:
+            wifi_channel_sweeper(phy, mon, channel_queue, sleep_event)
+        except NoSupportedChannels:
+            logger.critical("No supported channels to sweep through.")
+            return 1
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return 1
 
     logger.info("Exiting channel selection thread.")
     return 0
