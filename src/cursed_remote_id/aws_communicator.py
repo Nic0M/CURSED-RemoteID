@@ -1,9 +1,12 @@
 import logging
-import boto3
-from botocore.exceptions import ClientError
 import os
 import queue
 
+# AWS modules
+import boto3
+import botocore.exceptions
+
+# Local modules
 import helpers
 
 logger = logging.getLogger(__name__)
@@ -60,20 +63,25 @@ def upload_file(s3_client, file_name, bucket, object_name=None):
     if object_name is None:
         object_name = os.path.basename(file_name)
 
-    logger.info(f"Attempting to upload {file_name} as {object_name} to bucket "
-                f"{bucket}")
+    logger.info(
+        f"Attempting to upload {file_name} as {object_name} to bucket "
+        f"{bucket}",
+    )
     try:
-        response = s3_client.upload_file(file_name, bucket, object_name)
-    except ClientError as e:
-        logger.error(f"Failed to upload file to bucket.")
+        s3_client.upload_file(file_name, bucket, object_name)
+    except botocore.exceptions.ClientError as e:
+        logger.error("Failed to upload file to bucket.")
         logger.error(e)
         return False
-    logger.info(f"Uploaded file to bucket successfully.")
+    logger.info("Uploaded file to bucket successfully.")
     return True
 
 
-def uploader(file_queue, bucket_name, remove_files, max_error_count,
-             csv_writer_exit_event):
+def uploader(
+    file_queue, bucket_name, remove_files, max_error_count,
+    csv_writer_exit_event,
+):
+    """Main entry point for uploader thread."""
 
     thread_logger = logging.getLogger("uploader-thread")
     thread_logger.setLevel(logging.INFO)
@@ -100,18 +108,23 @@ def uploader(file_queue, bucket_name, remove_files, max_error_count,
             uploaded = upload_file(s3_client, file_name, bucket_name)
             if not uploaded:
                 error_count += 1
-                thread_logger.error(f"Failed to upload file {file_name}. "
-                                    f"Total errors: {error_count}")
+                thread_logger.error(
+                    f"Failed to upload file {file_name}. "
+                    f"Total errors: {error_count}",
+                )
             if remove_files:
                 helpers.safe_remove(file_name)
         else:
             error_count += 1
-            thread_logger.error(f"File {file_name} doesn't exist. Cannot "
-                                f"upload the file. Total Errors: "
-                                f"{error_count}.")
+            thread_logger.error(
+                f"File {file_name} doesn't exist. Cannot "
+                f"upload the file. Total Errors: "
+                f"{error_count}.",
+            )
     if error_count >= max_error_count:
-        thread_logger.error(f"Total errors: {error_count} exceeds maximum "
-                            f"allowed errors: {max_error_count}.")
+        thread_logger.error(
+            f"Total errors: {error_count} exceeds maximum "
+            f"allowed errors: {max_error_count}.",
+        )
     thread_logger.info("Terminating thread.")
     return None
-

@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import threading
-import queue
 import os
-import sys
+import queue
 import subprocess
+import sys
+import threading
 
 # Local files
 import setup_logging
 import aws_communicator
-import csv_creator
 import channel_swapper
+import csv_creator
 import packet_logger
 
 
 def all_requirements_installed():
+    """Returns True if all required utilities are installed. Returns False otherwise"""
 
-    cli_utilities = ["iw", "airmon-ng", "tshark"]
+    cli_utilities = ["iw","airmon-ng","tshark"]
     for utility in cli_utilities:
         logger.info(f"Checking '{utility}' installation.")
         cmd = ["command", "-v", utility]
@@ -36,17 +37,21 @@ def all_requirements_installed():
     # Note: tab character is inserted in by Python, so $'\t' is not needed
     cmd = "tshark -G protocols | grep -i opendroneid | cut -d '\t' -f 3"
     try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT,
-                                         shell=True)
+        output = subprocess.check_output(
+            cmd, stderr=subprocess.STDOUT,
+            shell=True,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running command {cmd}.")
         logger.error(f"STDOUT: {e.stdout}")
         return False
 
-    critical_protocols = ["opendroneid",
-                          "opendroneid.basicid",
-                          "opendroneid.location",
-                          "opendroneid.message.pack"]
+    critical_protocols = [
+        "opendroneid",
+        "opendroneid.basicid",
+        "opendroneid.location",
+        "opendroneid.message.pack",
+    ]
     for protocol in critical_protocols:
         if protocol not in output:
             logger.error(f"Missing Open Drone ID protocol: {protocol}")
@@ -54,10 +59,12 @@ def all_requirements_installed():
         else:
             logger.info(f"Found Open Drone ID protocol: {protocol}")
 
-    non_critical_protocols = ["opendroneid.message.authentication",
-                              "opendroneid.message.operatorid",
-                              "opendroneid.message.system",
-                              "opendroneid.message.selfid"]
+    non_critical_protocols = [
+        "opendroneid.message.authentication",
+        "opendroneid.message.operatorid",
+        "opendroneid.message.system",
+        "opendroneid.message.selfid",
+    ]
     for protocol in non_critical_protocols:
         if protocol not in output:
             logger.warning(f"Missing optional protocol: {protocol}")
@@ -68,6 +75,7 @@ def all_requirements_installed():
 
 
 def main():
+    """Main script for setting up threads."""
 
     # Check if script was run with sudo/root permissions
     if os.geteuid() != 0:
@@ -83,8 +91,10 @@ def main():
     use_bt = not args.disable_bt
 
     if not use_wifi and not use_bt:
-        logger.error("All wireless interfaces have been disabled through "
-                     "command-line arguments. Cannot start scanning.")
+        logger.error(
+            "All wireless interfaces have been disabled through "
+            "command-line arguments. Cannot start scanning.",
+        )
         return 1
 
     # Event to signal low power mode
@@ -101,16 +111,18 @@ def main():
 
     mac_addr = "00c0cab400dd"
 
-    channel_swapper_thread = threading.Thread(target=channel_swapper.main,
-                                              args=(mac_addr,
-                                                    wifi_interface_queue,
-                                                    bluetooth_interface_queue,
-                                                    channel_queue,
-                                                    use_wifi,
-                                                    use_bt,
-                                                    sleep_event
-                                                    ),
-                                              )
+    channel_swapper_thread = threading.Thread(
+        target=channel_swapper.main,
+        args=(
+            mac_addr,
+            wifi_interface_queue,
+            bluetooth_interface_queue,
+            channel_queue,
+            use_wifi,
+            use_bt,
+            sleep_event,
+        ),
+    )
     logger.info("Starting channel swapper thread...")
     channel_swapper_thread.start()
 
@@ -124,17 +136,19 @@ def main():
     sleep_timeout = 3600  # 1 hour
     interface_setup_timeout = 5  # 30 seconds
 
-    packet_logger_thread = threading.Thread(target=packet_logger.main,
-                                            args=(wifi_interface_queue,
-                                                  bluetooth_interface_queue,
-                                                  packet_queue,
-                                                  use_wifi,
-                                                  use_bt,
-                                                  pcap_timeout_event,
-                                                  sleep_timeout,
-                                                  interface_setup_timeout,
-                                                  ),
-                                            )
+    packet_logger_thread = threading.Thread(
+        target=packet_logger.main,
+        args=(
+            wifi_interface_queue,
+            bluetooth_interface_queue,
+            packet_queue,
+            use_wifi,
+            use_bt,
+            pcap_timeout_event,
+            sleep_timeout,
+            interface_setup_timeout,
+        ),
+    )
     logger.info("Starting packet logger thread...")
     packet_logger_thread.start()
 
@@ -145,32 +159,37 @@ def main():
     csv_writer_exit_event = threading.Event()
     csv_writer_exit_event.clear()
 
-    csv_writer_thread = threading.Thread(target=csv_creator.csv_writer,
-                                         args=(packet_queue,
-                                               upload_file_queue,
-                                               csv_writer_exit_event,
-                                               ),
-                                         )
+    csv_writer_thread = threading.Thread(
+        target=csv_creator.csv_writer,
+        args=(
+            packet_queue,
+            upload_file_queue,
+            csv_writer_exit_event,
+        ),
+    )
     logger.info("Starting csv writer thread...")
     csv_writer_thread.start()
 
     upload_bucket_name = "cursed-remoteid-data"
     remove_uploaded_files = False
     uploader_max_error_count = 5
-    uploader_thread = threading.Thread(target=aws_communicator.uploader,
-                                       args=(upload_file_queue,
-                                             upload_bucket_name,
-                                             remove_uploaded_files,
-                                             uploader_max_error_count,
-                                             csv_writer_exit_event)
-                                       )
+    uploader_thread = threading.Thread(
+        target=aws_communicator.uploader,
+        args=(
+            upload_file_queue,
+            upload_bucket_name,
+            remove_uploaded_files,
+            uploader_max_error_count,
+            csv_writer_exit_event,
+        ),
+    )
     logger.info("Starting uploader thread...")
     # uploader_thread.start()  # TODO: uncomment when ready to push to AWS
 
     channel_swapper_thread.join()
     packet_logger_thread.join()
     csv_writer_thread.join()
-    # uploader_thread.join()  # TODO: uncomment when uncomment start thread
+    uploader_thread.join()
 
     logger.info("All threads joined. Exiting...")
     return 0
@@ -179,12 +198,16 @@ def main():
 if __name__ == "__main__":
 
     # Create command line arguments
-    parser = argparse.ArgumentParser(description="Remote ID packet capture script.")
+    parser = argparse.ArgumentParser(
+        description="Remote ID packet capture script.",
+    )
 
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--log-file", type=str, default="logs/debug.log",
-                        help="Log file location. Default is logs/debug.log")
+    parser.add_argument(
+        "--log-file", type=str, default="logs/debug.log",
+        help="Log file location. Default is logs/debug.log",
+    )
     parser.add_argument("--disable-wifi", action="store_true")
     parser.add_argument("--disable-bt", action="store_true")
 
@@ -203,10 +226,12 @@ if __name__ == "__main__":
         file_logging_level = logging.DEBUG
 
     # Set up logging format
-    setup_logging.setup_logging(root_level=root_logging_level,
-                                console_level=console_logging_level,
-                                file_level=file_logging_level,
-                                log_file=args.log_file)
+    setup_logging.setup_logging(
+        root_level=root_logging_level,
+        console_level=console_logging_level,
+        file_level=file_logging_level,
+        log_file=args.log_file,
+    )
 
     # Set up main script logging
     logger = logging.getLogger(__name__)

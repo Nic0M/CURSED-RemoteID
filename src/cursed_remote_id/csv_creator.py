@@ -1,11 +1,11 @@
 import csv
-import uuid
-import os
 import logging
-from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
-import time
+import os
 import queue
 import re
+import time
+import uuid
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 # Local files
 import helpers
@@ -19,20 +19,27 @@ def clean_tmp_csv_directory():
         case "posix":
             tmp_directory = PurePosixPath("/var", "tmp")
         case "nt":
-            tmp_directory = PureWindowsPath("C:", "Users", "AppData", "Local",
-                                            "Temp")
+            tmp_directory = PureWindowsPath(
+                "C:", "Users", "AppData", "Local",
+                "Temp",
+            )
         case _:
-            logger.error(f"Unknown OS {os_name}. Using current directory to "
-                         f"store temporary files.")
+            logger.error(
+                f"Unknown OS {os_name}. Using current directory to "
+                f"store temporary files.",
+            )
             tmp_directory = ""
     tmp_directory = Path(tmp_directory, "remote-id-data")
     logger.info(f"Storing temporary files in {tmp_directory}")
     try:
         tmp_directory.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
-        logger.info(f"Directory already exists, deleting existing files")
+        logger.info("Directory already exists, deleting existing files.")
         # If the folder exists, there may be leftover files from a previous run
-        for (dir_name, _, base_names) in os.walk(tmp_directory, followlinks=False):
+        for (dir_name, _, base_names) in os.walk(
+            tmp_directory,
+            followlinks=False,
+        ):
             # Delete all files in the tmp directory
             for base_name in base_names:
                 helpers.safe_remove(PurePath(dir_name, base_name))
@@ -40,31 +47,36 @@ def clean_tmp_csv_directory():
     return tmp_directory
 
 
-header_row = ["Source Address", "Unique ID", "Timestamp", "Heading",
-              "Ground Speed", "Vertical Speed", "Latitude", "Longitude"]
+header_row = [
+    "Source Address", "Unique ID", "Timestamp", "Heading",
+    "Ground Speed", "Vertical Speed", "Latitude", "Longitude",
+]
 
 
 class InvalidRemoteIDPacketError(Exception):
-    pass
+    """Packet does not use the Open Drone ID protocol."""
 
 
 class MissingSourceAddressError(InvalidRemoteIDPacketError):
-    pass
+    """Packet is missing the source address."""
 
 
 class MissingRemoteIDInformationError(InvalidRemoteIDPacketError):
-    pass
+    """Packet is missing Remote ID information."""
 
 
 class MissingUniqueIDError(InvalidRemoteIDPacketError):
-    pass
+    """Packet is missing Unique ID found in the Open Drone ID
+    (Basic ID message)."""
 
 
 class MissingTimestampError(InvalidRemoteIDPacketError):
-    pass
+    """Packet is missing a UTC timestamp or the timestamp since the UTC hour
+    in the Open Drone ID (Location Message)"""
 
 
 def create_row(pkt):
+    """Creates a table of elements corresponding to one row of the CSV."""
     # Determine if Bluetooth or Wi-Fi packet
     try:
         src_addr = pkt.btle.advertising_address
@@ -100,8 +112,12 @@ def create_row(pkt):
     except AttributeError:
         raise MissingTimestampError
     epoch_timestamp = float(epoch_timestamp)
-    remoteid_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) + int(time_since_utc_hour) // 10
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(remoteid_utc_timestamp))
+    remoteid_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) \
+        + int(time_since_utc_hour) // 10
+    timestamp = time.strftime(
+        '%Y-%m-%d %H:%M:%S',
+        time.gmtime(remoteid_utc_timestamp),
+    )
 
     # Other
     try:
@@ -116,24 +132,27 @@ def create_row(pkt):
     # if lat <= 0 and lon == 0:
     #     raise InvalidRemoteIDPacketError
 
-    row = [src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
-           lat, lon]
+    row = [
+        src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
+        lat, lon,
+    ]
     return row
 
 
-def csv_writer(packet_queue, upload_file_queue, exit_event,
-               max_packet_count=100,
-               max_elapsed_time=300,  # 5 minutes
-               max_error_count=10,
-               upload_file_queue_timeout=5,  # 5 seconds
-               ):
+def csv_writer(
+    packet_queue, upload_file_queue, exit_event,
+    max_packet_count=100,
+    max_elapsed_time=300,  # 5 minutes
+    max_error_count=10,
+    upload_file_queue_timeout=5,  # 5 seconds
+):
+    """Main entry point for CSV writer thread."""
 
-    logger.info("Starting thread")
-
+    logger.info("Cleaning .csv file temporary directory.")
     tmp_directory = clean_tmp_csv_directory()
 
     error_count = 0
-    # while error_count < max_error_count:
+    # while error_count < max_error_count: # TODO: implement
     if True:
 
         # Create a new .csv file with a unique hash for the filename
@@ -157,14 +176,18 @@ def csv_writer(packet_queue, upload_file_queue, exit_event,
                     and elapsed_time < max_elapsed_time:
 
                 try:
-                    packet = packet_queue.get(timeout=5)  # Blocks until next packet is received
+                    packet = packet_queue.get(
+                        timeout=5,
+                    )  # Blocks until next packet is received
                 except queue.Empty:
                     logger.info("Timed out waiting for packet queue.")
                     break
 
                 if packet is None:
-                    logger.info("Received termination message from packet "
-                                "queue.")
+                    logger.info(
+                        "Received termination message from packet "
+                        "queue.",
+                    )
                     break
 
                 try:
@@ -182,19 +205,25 @@ def csv_writer(packet_queue, upload_file_queue, exit_event,
         # Send file to be uploaded if not empty.
         if packet_count > 0:
             try:
-                upload_file_queue.put(file_name, block=True,
-                                      timeout=upload_file_queue_timeout)
+                upload_file_queue.put(
+                    file_name, block=True,
+                    timeout=upload_file_queue_timeout,
+                )
             except queue.Full:
-                logger.error(f"Upload file queue is full, skipping "
-                             f"file {file_name}.")
+                logger.error(
+                    f"Upload file queue is full, skipping "
+                    f"file {file_name}.",
+                )
                 helpers.safe_remove(file_name)
         else:
             logger.info("Removing file with no packets.")
             helpers.safe_remove(file_name)
 
     if error_count >= max_error_count:
-        logger.error(f"Total errors: {error_count} exceeds the maximum "
-                     f"allowable errors: {max_error_count}.")
+        logger.error(
+            f"Total errors: {error_count} exceeds the maximum "
+            f"allowable errors: {max_error_count}.",
+        )
 
     logger.info("Terminating thread.")
 
@@ -202,5 +231,3 @@ def csv_writer(packet_queue, upload_file_queue, exit_event,
     # uploader will not block indefinitely on an empty queue
     exit_event.set()
     upload_file_queue.put(None)
-
-    return

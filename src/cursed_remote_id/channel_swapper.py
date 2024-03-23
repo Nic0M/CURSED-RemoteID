@@ -1,34 +1,37 @@
-import subprocess
-import re
-import os
 import logging
-import time
+import os
 import queue
+import re
+import subprocess
+import time
 
 logger = logging.getLogger(__name__)
 
 
 class InvalidInterfaceName(Exception):
-    pass
+    """Invalid Interface Name"""
 
 
 class NoSupportedChannels(Exception):
-    pass
+    """No Supported Channels"""
 
 
 class InterfaceNoLongerInMonitorMode(Exception):
-    pass
+    """Interface No Longer In Monitor Mode"""
 
 
 class IllegalChannel(Exception):
-    pass
+    """Illegal Channel"""
 
 
 class CommandNotFound(Exception):
-    pass
+    """Command Not Found"""
 
 
 class ChannelDictionary:
+    """Object which contains information about recent Remote ID
+    transmissions."""
+
     def __init__(self, channel_queue, supported_channels):
         self.queue = channel_queue
         self.supported_channels = supported_channels
@@ -37,9 +40,11 @@ class ChannelDictionary:
         self.channels = []
         self.use_default_sweep()
 
-        self.ch_pkt_count = self._create_channel_packet_count()        
+        self.ch_pkt_count = self._create_channel_packet_count()
 
     def use_default_sweep(self):
+        """Sets the channel sweep to be a linear sweep through the
+        non-overlapping channels with an emphasis on the 2.4 GHz channels."""
         self.channels = [
             ("1", 0.5),
             ("6", 0.5),
@@ -59,6 +64,8 @@ class ChannelDictionary:
 
     @staticmethod
     def _create_channel_packet_count():
+        """Initializes the channel packet count list with all possible
+        Wi-Fi channels."""
         two_ghz_chs = list(range(1, 14))  # Channels 1-13
         lower_five_ghz_chs = list(range(36, 49, 4))  # 36, 40, 44, 48
         upper_five_ghz_chs = list(range(149, 162, 4))  # 149, 153, 157, 161
@@ -70,6 +77,8 @@ class ChannelDictionary:
         return ch_pkt_count
 
     def reset_channel_packet_count(self):
+        """Resets all stored information about Remote ID packet counts for
+        each channel."""
         for channel in self.ch_pkt_count:
             self.ch_pkt_count[channel] = 0
 
@@ -89,13 +98,20 @@ class ChannelDictionary:
         # TODO: each channel
 
     def get_channels(self):
+        """Returns a list of the current channels to sweep through."""
         return self.channels
 
     def remove(self, channel):
-        self.supported_channels = [x for x in self.supported_channels
-                                   if x != channel]
-        self.channels = [(ch, t) for (ch, t) in self.channels
-                         if ch != channel]
+        """Removes a channel from the channel sweep and supported channel
+        list."""
+        self.supported_channels = [
+            x for x in self.supported_channels
+            if x != channel
+        ]
+        self.channels = [
+            (ch, t) for (ch, t) in self.channels
+            if ch != channel
+        ]
 
 
 def sanitize_physical_interface_name(phy_name):
@@ -177,15 +193,18 @@ def get_supported_channel_list(phy, mon):
 
     logger.info(f"Running command: {get_channels_cmd}")
     try:
-        output = subprocess.check_output(get_channels_cmd,
-                                         shell=True,
-                                         text=True,  # Makes output a string,
-                                         )
+        output = subprocess.check_output(
+            get_channels_cmd,
+            shell=True,
+            text=True,  # Makes output a string,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"CalledProcessError: {e}")
         if e.returncode == 127:
-            logger.error("Ensure that iw is installed and correctly added to "
-                         "PATH.")
+            logger.error(
+                "Ensure that iw is installed and correctly added to "
+                "PATH.",
+            )
         logger.error(f"STDOUT: {e.stdout}")
         return None
     lines = output.strip().split('\n')
@@ -209,14 +228,18 @@ def get_supported_channel_list(phy, mon):
 
 
 def set_channel(mon, channel):
+    """Tries to set the given monitor mode interface to the given channel.
+    Throws an error if unsuccessful."""
 
     mon = sanitize_mon_interface_name(mon)
     channel = str(channel)
 
     # Sanitize channel input since running with shell=True
     if not channel.isdigit():
-        logger.error(f"Channel: {channel} is not a number. Cannot set "
-                     f"monitor interface {mon} to that channel.")
+        logger.error(
+            f"Channel: {channel} is not a number. Cannot set "
+            f"monitor interface {mon} to that channel.",
+        )
         raise ValueError(channel)
 
     set_channel_cmd = f"iw dev {mon} set channel {channel} 2>&1"
@@ -227,39 +250,47 @@ def set_channel(mon, channel):
         logger.error(f"Failed to switch to channel {channel}.")
         logger.error(f"STDOUT: {e.stdout}")
         if "(-16)" in e.output:
-            logger.error(f"Interface {mon} is likely no longer in "
-                         f"monitor mode.")
+            logger.error(
+                f"Interface {mon} is likely no longer in "
+                f"monitor mode.",
+            )
             raise InterfaceNoLongerInMonitorMode(mon)
         elif "(-22)" in e.output:
             logger.error(f"Channel {channel} cannot be legally used.")
             raise IllegalChannel(channel)
         elif e.returncode == 127:
-            logger.error(f"Command not found. Likely missing 'iw'")
+            logger.error("Command not found. Likely missing 'iw'")
             raise CommandNotFound(set_channel_cmd)
         else:
-            raise Exception(e)
+            raise subprocess.CalledProcessError from e
     logger.info(f"Switched to channel {channel} successfully.")
     return channel
 
 
 def setup_wifi_interface(mac_addr):
+    """Tries to set up the Wi-Fi monitor mode interface. Returns the
+    physical wireless interface name and the monitor interface name if
+    successful. Otherwise, throws an error."""
 
     # Kill any network processes that might interfere with monitor mode
     check_kill_cmd = "sudo airmon-ng check kill"
     try:
-        subprocess.run(check_kill_cmd, shell=True)
+        subprocess.run(check_kill_cmd, shell=True, check=True)
     except subprocess.CalledProcessError as e:
         logger.error(e)
         logger.error(e.output)
-        raise Exception  # TODO: make less generic
+        raise subprocess.CalledProcessError from e
 
     # Possible interface names for the external Wi-Fi network card
     long_interface_name = f"wlx{mac_addr}"
     short_interface_name = "wlan1"  # wlan0 is the built-in Wi-Fi card on Pi
-    # TODO: ALSO TRY wlan1mon
+    short_mon_interface_name = "wlan1mon"
+    # TODO: find number from iwconfig
 
     cmd_long_name = f"sudo airmon-ng start {long_interface_name} 2>&1"
     cmd_short_name = f"sudo airmon-ng start {short_interface_name} 2>&1"
+    cmd_short_mon_name = f"sudo airmon-ng start {short_mon_interface_name}" \
+                         f" 2>&1"
 
     logger.info(f"Trying to use long name: {cmd_long_name}")
     try:
@@ -271,18 +302,27 @@ def setup_wifi_interface(mac_addr):
             logger.critical("Insufficient permission to run script.")
             raise PermissionError
         elif "command not found" in e.output:
-            logger.error("Ensure that airmon-ng is installed. "
-                         "Try 'sudo apt install aircrack-ng'")
+            logger.error(
+                "Ensure that airmon-ng is installed. "
+                "Try 'sudo apt install aircrack-ng'",
+            )
             raise CommandNotFound("airmon-ng")
         elif "No such device" in e.output:
             logger.info(f"Trying to use short name: {cmd_short_name}")
             try:
-                output = subprocess.check_output(cmd_short_name, shell=True, text=True)
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error: {e}")
-                raise Exception  # TODO: make less generic
-        else:
-            raise Exception  # TODO: make less generic
+                output = subprocess.check_output(
+                    cmd_short_name, shell=True, text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                logger.error(f"Error: {exc}")
+            logger.info(f"Trying to use mon name: {cmd_short_mon_name}")
+            try:
+                output = subprocess.check_output(
+                    cmd_short_name, shell=True, text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                logger.error(f"Error: {exc}")
+        raise subprocess.CalledProcessError from e
 
     # Get the physical wireless interface name and the monitoring interface
     regex_str = r"\[(phy\d+)\](wlan\d+mon)"
@@ -293,12 +333,14 @@ def setup_wifi_interface(mac_addr):
     else:
         logger.error(f"No regex match found in output with regex: {regex_str}")
         logger.error(f"Output: {output}")
-        raise Exception  # TODO: make less generic
+        raise RuntimeError
     logger.info(f"phy: {phy_name}, mon: {mon_name}")
     return phy_name, mon_name
 
 
 def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
+    """Sweeps through Wi-Fi channels and applies channel selection
+    algorithm."""
 
     supported_channels = get_supported_channel_list(phy, mon)
     if supported_channels is None:
@@ -311,9 +353,11 @@ def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
         for channel, scan_time in channel_dict.get_channels():
             try:
                 set_channel(mon, channel)
-            except IllegalChannel as e:
-                logger.error(f"Removing illegal channel {channel} from "
-                             f"channel list.")
+            except IllegalChannel:
+                logger.error(
+                    f"Removing illegal channel {channel} from "
+                    f"channel list.",
+                )
                 channel_dict.remove(channel)
                 continue
             except ValueError as e:
@@ -332,8 +376,10 @@ def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
     return None
 
 
-def main(mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
-         use_wifi, use_bt, sleep_event):
+def main(
+    mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
+    use_wifi, use_bt, sleep_event,
+):
     """Main entry point for channel selection thread."""
 
     logger.info("Started channel selection thread.")
@@ -348,8 +394,10 @@ def main(mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
         try:
             wifi_interface_queue.put(mon, block=False)
         except queue.Full:  # This shouldn't be possible
-            logger.critical("Wi-Fi interface queue is somehow full. Cannot "
-                            "notify other threads of successful setup.")
+            logger.critical(
+                "Wi-Fi interface queue is somehow full. Cannot "
+                "notify other threads of successful setup.",
+            )
             return 1
     else:
         logger.info("Skipping Wi-Fi setup.")
@@ -360,8 +408,10 @@ def main(mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
         try:
             bt_interface_queue.put(bt_interface_name, block=False)
         except queue.Full:  # This shouldn't be possible
-            logger.critical("Bluetooth interface queue is somehow full. Cannot"
-                            "notify other threads of successful setup.")
+            logger.critical(
+                "Bluetooth interface queue is somehow full. Cannot"
+                "notify other threads of successful setup.",
+            )
             return 1
     else:
         logger.info("Skipping Bluetooth setup.")

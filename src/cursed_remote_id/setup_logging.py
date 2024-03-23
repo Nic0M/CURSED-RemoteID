@@ -4,8 +4,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(root_level=logging.DEBUG, console_level=logging.ERROR,
-                  file_level=logging.INFO, log_file="logs/debug.log"):
+def setup_logging(
+    root_level=logging.DEBUG, console_level=logging.ERROR,
+    file_level=logging.INFO, log_file="logs/debug.log",
+):
     """Configures logging"""
 
     # Set the root logging level. No other loggers can log a message below this
@@ -19,7 +21,8 @@ def setup_logging(root_level=logging.DEBUG, console_level=logging.ERROR,
     # Example: 2024-03-08 UTC-0700 11:41:54.587  __main__    [ERROR] error msg
     formatter = logging.Formatter(
         "%(asctime)s.%(msecs)3d  %(name)-15s  [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d UTC%z %H:%M:%S")
+        datefmt="%Y-%m-%d UTC%z %H:%M:%S",
+    )
 
     # Create a stream handler log CONSOLE_LEVEL or above to the console
     console_handler = logging.StreamHandler()
@@ -44,6 +47,7 @@ def setup_logging(root_level=logging.DEBUG, console_level=logging.ERROR,
 
 
 def logging_test():
+    """Method for testing all logging levels."""
     logger.debug("This is a debug message test and can be safely ignored.")
     logger.info("This is an info message test and can be safely ignored.")
     logger.warning("This is a warning message test and can be safely ignored.")

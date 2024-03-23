@@ -1,16 +1,16 @@
 import json
-import urllib.parse
-import boto3
-from botocore.exceptions import ClientError
 import logging
 import os
-import sys
+import urllib.parse
+
+import boto3
 import pymysql
 
 # Set logging levels
 logger = logging.getLogger()
 logger.setLevel(
-    logging.DEBUG)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    logging.DEBUG,
+)  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 
 def get_database_credentials():
@@ -25,12 +25,15 @@ def get_database_credentials():
         db = os.environ["DB_NAME"]
     except KeyError as e:
         logger.error(
-            f"ERROR: Could not retrieve database credentials from environment variables. {repr(e):s}.")
-        return (None, None, None, None)
+            f"ERROR: Could not retrieve database credentials from environment "
+            f"variables. {repr(e):s}.",
+        )
+        return None, None, None, None
 
     logger.info(
-        "SUCCESS: Found database credentials in environment variables.")
-    return (user, pwd, host, db)
+        "SUCCESS: Found database credentials in environment variables.",
+    )
+    return user, pwd, host, db
 
 
 # Get database credentials
@@ -45,11 +48,14 @@ def connect_to_database(user, pwd, host, db):
     # return None
 
     try:
-        connection = pymysql.connect(host=host, user=user, passwd=pwd, db=db,
-                                     connect_timeout=5)
+        connection = pymysql.connect(
+            host=host, user=user, passwd=pwd, db=db,
+            connect_timeout=5,
+        )
     except pymysql.MySQLError as e:
         logger.error(
-            "ERROR: Unexpected error: Could not connect to MySQL instance.")
+            "ERROR: Unexpected error: Could not connect to MySQL instance.",
+        )
         logger.error(e)
         return None
 
@@ -97,9 +103,13 @@ def lambda_handler(event, context):
 
     if conn is None or not conn.open:
         logger.warning(
-            "WARNING: Database connection doesn't exist. Attempting to reconnect to database.")
-        conn = connect_to_database(user_name, password, rds_proxy_host,
-                                   db_name)
+            "WARNING: Database connection doesn't exist. "
+            "Attempting to reconnect to database.",
+        )
+        conn = connect_to_database(
+            user_name, password, rds_proxy_host,
+            db_name,
+        )
         if conn is None:
             logger.error("ERROR: Couldn't reconnect to database.")
             return 502
@@ -108,7 +118,9 @@ def lambda_handler(event, context):
 
     if s3 is None:
         logger.warning(
-            "WARNING: s3 boto3 client doesn't exist. Attempting to recreate client.")
+            "WARNING: s3 boto3 client doesn't exist. "
+            "Attempting to recreate client.",
+        )
         s3 = create_s3_client()
         if s3 is None:
             logger.error("ERROR: Failed to recreate s3 client.")
@@ -123,11 +135,15 @@ def lambda_handler(event, context):
         bucket = event['Records'][0]['s3']['bucket']['name']
         # Get the filename
         key = urllib.parse.unquote_plus(
-            event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+            event['Records'][0]['s3']['object']['key'], encoding='utf-8',
+        )
     except KeyError as e:
         logger.error(
-            "ERROR: Invalid record in event. Make sure the lambda_handler is triggered from an S3 upload.")
+            "ERROR: Invalid record in event. Make sure the lambda_handler "
+            "is triggered from an S3 upload.",
+        )
         logger.error(e)
+        return 502
     logger.info("SUCCESS: Parsed record in event successfully.")
 
     logger.info(f"Attempting to get object {key} from bucket {bucket}.")
@@ -135,11 +151,14 @@ def lambda_handler(event, context):
         response = s3.get_object(Bucket=bucket, Key=key)
     except Exception as e:
         logger.error(
-            f"ERROR: Failed to get object {key} from bucket {bucket}. Make sure they exist and your bucket is in the same region as this function.")
+            f"ERROR: Failed to get object {key} from bucket {bucket}. "
+            f"Make sure they exist and your bucket is in the same region "
+            f"as this function.",
+        )
         logger.error(e)
         return {
             "StatusCode": 502,
-            "Body": "Failed to get object from bucket."
+            "Body": "Failed to get object from bucket.",
         }
     logger.info("SUCCESS: Retrieved object successfully.")
     logger.info(f"CONTENT TYPE: {response['ContentType']}")
@@ -149,6 +168,7 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error("Error decoding file")
         logger.error(e)
+        return 502
 
     rows = file_reader.split("\n")
     rows = list(filter(None, rows))
@@ -170,8 +190,9 @@ def lambda_handler(event, context):
         lon = int(user_data[7])
 
         packet = (
-        src_addr, id, timestamp, heading, ground_speed, vertical_speed, lat,
-        lon)
+            src_addr, id, timestamp, heading, ground_speed, vertical_speed,
+            lat, lon,
+        )
         logger.info(f"Appending packet: {packet}")
         packets.append(packet)
 
@@ -192,7 +213,9 @@ def lambda_handler(event, context):
             lat = pkt[6]
             lon = pkt[7]
 
-            sql_string = f"INSERT INTO {id_table_name:s}(src_addr, unique_id, lastTime) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
+            sql_string = f"INSERT INTO {id_table_name:s}" \
+                         f"(src_addr, unique_id, lastTime) " \
+                         f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
             logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
@@ -202,9 +225,15 @@ def lambda_handler(event, context):
             except pymysql.err.OperationalError as e:
                 logger.error("ERROR: MySQL OperationalError")
                 logger.error(e)
-            # TODO: except loss of connection "errorMessage": "(0, '')", "errorType": "InterfaceError",
+            # TODO: except loss of connection "errorMessage":
+            #  "(0, '')", "errorType": "InterfaceError",
 
-            sql_string = f"INSERT INTO {data_table_name:s}(src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed, lat, lon) VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}', {heading:d}, {ground_speed:d}, {vertical_speed:d}, {lat:d}, {lon:d});"
+            sql_string = f"INSERT INTO {data_table_name:s}" \
+                         f"(src_addr, unique_id, timestamp, heading, " \
+                         f"gnd_speed, vert_speed, lat, lon) " \
+                         f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}'," \
+                         f" {heading:d}, {ground_speed:d}, " \
+                         f"{vertical_speed:d}, {lat:d}, {lon:d});"
             logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
@@ -213,7 +242,11 @@ def lambda_handler(event, context):
                 logger.warning(e)
 
             cur.execute("SET SQL_SAFE_UPDATES=0;")  # Disable safe updates
-            sql_string = f"UPDATE {id_table_name:s} SET lastTime='{timestamp:s}' WHERE '{timestamp:s}' > (SELECT lastTime FROM {id_table_name:s} WHERE src_addr='{src_addr:s}');"
+            sql_string = f"UPDATE {id_table_name:s} " \
+                         f"SET lastTime='{timestamp:s}' " \
+                         f"WHERE '{timestamp:s}' > " \
+                         f"(SELECT lastTime FROM {id_table_name:s} " \
+                         f"WHERE src_addr='{src_addr:s}');"
             logging.info(f"SQL QUERY: {sql_string}")
             cur.execute(sql_string)
             cur.execute("SET SQL_SAFE_UPDATES=1;")  # Enable safe updates
@@ -230,5 +263,5 @@ def lambda_handler(event, context):
 
     return {
         "StatusCode": 200,
-        "Body": json.dumps(f"Added {item_count:d} items to the database")
+        "Body": json.dumps(f"Added {item_count:d} items to the database"),
     }

@@ -1,6 +1,38 @@
+---
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0  # Latest release as of March 14, 2024
     hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: debug-statements
+    -   id: requirements-txt-fixer
     -   id: detect-aws-credentials
         args: [--allow-missing-credentials]
+-   repo: https://github.com/asottile/add-trailing-comma
+    rev: v3.1.0
+    hooks:
+    -   id: add-trailing-comma
+-   repo: https://github.com/hhatto/autopep8
+    rev: v2.1.0
+    hooks:
+    -   id: autopep8
+-   repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+    -   id: flake8
+-   repo: local
+    hooks:
+    -   id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        args:
+            [
+                "--fail-under=9.0",
+                "--output-format=colorized"
+            ]
+        verbose:
+            true

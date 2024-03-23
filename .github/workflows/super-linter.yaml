@@ -1,8 +1,14 @@
-name: Lint
+---
+name: Super-Linter
 
 on:  # yamllint disable-line rule:truthy
   push:
+    branches:
+      - main
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -28,3 +34,8 @@ jobs:
         env:
           # To report GitHub Actions status checks
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHON_PYLINT_CONFIG_FILE: "~/.pylintrc"
+          VALIDATE_PYTHON_BLACK: false
+          VALIDATE_PYTHON_MYPY: false
+          VALIDATE_PYTHON_ISORT: false
+          FILTER_REGEX_EXCLUDE: "pcap_reader_pyshark.py"
