@@ -24,7 +24,7 @@ while x < 2:
         pcap = pyshark.FileCapture(
             path, display_filter="opendroneid.message.location",
         )
-        csvPath = path[:-6]+'csv'
+        csvPath = path[:-6] + 'csv'
         with open(csvPath, 'w', newline='', encoding="utf-8") as file:
             writer = csv.writer(file)
             field = [
@@ -50,17 +50,17 @@ while x < 2:
                             pkt['OpenDroneID'].get_field(
                                 'OpenDroneID.loc_timeStamp',
                             ),
-                        )/10/60,
+                        ) / 10 / 60,
                     )
                     Second = math.floor(
                         int(
                             pkt['OpenDroneID'].get_field(
                                 'OpenDroneID.loc_timeStamp',
                             ),
-                        )/10-(Minute*60),
+                        ) / 10 - (Minute * 60),
                     )
-                    TimeStamp = Year+'-'+Month+'-'+Day + \
-                        ' '+B+':'+str(Minute)+':'+str(Second)
+                    TimeStamp = Year + '-' + Month + '-' + Day + \
+                        ' ' + B + ':' + str(Minute) + ':' + str(Second)
                     ID = pkt['OpenDroneID'].get_field(
                         'OpenDroneID.basicID_id_asc',
                     )
@@ -97,6 +97,6 @@ while x < 2:
         start_time = time.time_ns()
         s3.upload_file(csvPath, "cursed-remoteid-data", csvPath[-28:])
         end_time = time.time_ns()
-        print(f'Elapsed upload time: {end_time-start_time:d} ns')
+        print(f'Elapsed upload time: {end_time - start_time:d} ns')
         # os.remove(csvPath)
-    x = x+1
+    x = x + 1

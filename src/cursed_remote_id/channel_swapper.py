@@ -290,7 +290,7 @@ def setup_wifi_interface(mac_addr):
     cmd_long_name = f"sudo airmon-ng start {long_interface_name} 2>&1"
     cmd_short_name = f"sudo airmon-ng start {short_interface_name} 2>&1"
     cmd_short_mon_name = f"sudo airmon-ng start {short_mon_interface_name}" \
-                         f" 2>&1"
+        f" 2>&1"
 
     logger.info(f"Trying to use long name: {cmd_long_name}")
     try:

@@ -214,8 +214,8 @@ def lambda_handler(event, context):
             lon = pkt[7]
 
             sql_string = f"INSERT INTO {id_table_name:s}" \
-                         f"(src_addr, unique_id, lastTime) " \
-                         f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
+                f"(src_addr, unique_id, lastTime) " \
+                f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}');"
             logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
@@ -229,11 +229,11 @@ def lambda_handler(event, context):
             #  "(0, '')", "errorType": "InterfaceError",
 
             sql_string = f"INSERT INTO {data_table_name:s}" \
-                         f"(src_addr, unique_id, timestamp, heading, " \
-                         f"gnd_speed, vert_speed, lat, lon) " \
-                         f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}'," \
-                         f" {heading:d}, {ground_speed:d}, " \
-                         f"{vertical_speed:d}, {lat:d}, {lon:d});"
+                f"(src_addr, unique_id, timestamp, heading, " \
+                f"gnd_speed, vert_speed, lat, lon) " \
+                f"VALUES('{src_addr:s}', '{id:s}', '{timestamp:s}'," \
+                f" {heading:d}, {ground_speed:d}, " \
+                f"{vertical_speed:d}, {lat:d}, {lon:d});"
             logging.info(f"SQL QUERY: {sql_string}")
             try:
                 cur.execute(sql_string)
@@ -243,10 +243,10 @@ def lambda_handler(event, context):
 
             cur.execute("SET SQL_SAFE_UPDATES=0;")  # Disable safe updates
             sql_string = f"UPDATE {id_table_name:s} " \
-                         f"SET lastTime='{timestamp:s}' " \
-                         f"WHERE '{timestamp:s}' > " \
-                         f"(SELECT lastTime FROM {id_table_name:s} " \
-                         f"WHERE src_addr='{src_addr:s}');"
+                f"SET lastTime='{timestamp:s}' " \
+                f"WHERE '{timestamp:s}' > " \
+                f"(SELECT lastTime FROM {id_table_name:s} " \
+                f"WHERE src_addr='{src_addr:s}');"
             logging.info(f"SQL QUERY: {sql_string}")
             cur.execute(sql_string)
             cur.execute("SET SQL_SAFE_UPDATES=1;")  # Enable safe updates

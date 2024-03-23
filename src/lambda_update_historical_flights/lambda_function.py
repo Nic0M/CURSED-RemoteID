@@ -104,22 +104,22 @@ def lambda_handler(event, context):
     with conn.cursor() as cur:
 
         sql_string = f"INSERT INTO {complete_table_name} " \
-                     f"(src_addr, unique_id, duration, start_time, end_time," \
-                     f"max_gnd_speed, max_vert_speed, max_height_agl, " \
-                     f"max_alt) " \
-                     f"SELECT active_flights.src_addr, " \
-                     f"active_flights.unique_id, " \
-                     f"TIMESTAMPDIFF(second, active_flights.startTime, " \
-                     f"active_flights.currTime) as duration, " \
-                     f"active_flights.startTime, active_flights.currTime, " \
-                     f"max(remoteid_packets.gnd_speed) as max_gnd_speed, " \
-                     f"max(remoteid_packets.vert_speed) as max_vert_speed, " \
-                     f"max(remoteid_packets.height) as max_height_agl, " \
-                     f"max(remoteid_packets.geoAlt) as max_height_agl " \
-                     f"FROM active_flights,remoteid_packets " \
-                     f"WHERE active_flights.src_addr=remoteid_packets. " \
-                     f"src_addr and TIMESTAMPDIFF(second, " \
-                     f"active_flights.currTime,CURRENT_TIMESTAMP)>600;"
+            f"(src_addr, unique_id, duration, start_time, end_time," \
+            f"max_gnd_speed, max_vert_speed, max_height_agl, " \
+            f"max_alt) " \
+            f"SELECT active_flights.src_addr, " \
+            f"active_flights.unique_id, " \
+            f"TIMESTAMPDIFF(second, active_flights.startTime, " \
+            f"active_flights.currTime) as duration, " \
+            f"active_flights.startTime, active_flights.currTime, " \
+            f"max(remoteid_packets.gnd_speed) as max_gnd_speed, " \
+            f"max(remoteid_packets.vert_speed) as max_vert_speed, " \
+            f"max(remoteid_packets.height) as max_height_agl, " \
+            f"max(remoteid_packets.geoAlt) as max_height_agl " \
+            f"FROM active_flights,remoteid_packets " \
+            f"WHERE active_flights.src_addr=remoteid_packets. " \
+            f"src_addr and TIMESTAMPDIFF(second, " \
+            f"active_flights.currTime,CURRENT_TIMESTAMP)>600;"
         logging.info(f"SQL QUERY: {sql_string}")
         try:
             cur.execute(sql_string)

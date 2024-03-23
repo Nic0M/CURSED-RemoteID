@@ -18,7 +18,7 @@ import packet_logger
 def all_requirements_installed():
     """Returns True if all required utilities are installed. Returns False otherwise"""
 
-    cli_utilities = ["iw","airmon-ng","tshark"]
+    cli_utilities = ["iw", "airmon-ng", "tshark"]
     for utility in cli_utilities:
         logger.info(f"Checking '{utility}' installation.")
         cmd = ["command", "-v", utility]
