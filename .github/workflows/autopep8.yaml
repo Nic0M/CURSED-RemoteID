@@ -30,7 +30,7 @@ jobs:
       - name: Apply autopep8
         id: apply-autopep8
         run: |
-          autopep8 --in-place --recursive --aggressive --verbose . > changelist.txt
+          autopep8 --in-place --recursive --aggressive --verbose . 2>&1 | tee changelist.txt
           if git diff --quiet; then
             echo "No changes were made"
           else
@@ -38,6 +38,7 @@ jobs:
             git config user.name github-actions
             git config user.email github-actions@github.com
             git add .
+            git restore --staged changelist.txt
             git commit -m "Auto-formatted files for PEP-8 compliance" -m "$(cat changelist.txt)"
             git push
           fi

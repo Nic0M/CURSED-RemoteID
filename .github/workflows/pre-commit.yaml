@@ -3,6 +3,8 @@ name: Pre-Commit Checks
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
