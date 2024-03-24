@@ -145,6 +145,7 @@ def csv_writer(
     max_elapsed_time=300,  # 5 minutes
     max_error_count=10,
     upload_file_queue_timeout=5,  # 5 seconds
+    packet_timeout=120,  # 2 minutes of no Open Drone ID packets
 ):
     """Main entry point for CSV writer thread."""
 
@@ -177,7 +178,7 @@ def csv_writer(
 
                 try:
                     packet = packet_queue.get(
-                        timeout=5,
+                        timeout=packet_timeout,
                     )  # Blocks until next packet is received
                 except queue.Empty:
                     logger.info("Timed out waiting for packet queue.")

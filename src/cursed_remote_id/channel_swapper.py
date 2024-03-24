@@ -43,14 +43,14 @@ class ChannelDictionary:
         non-overlapping channels with an emphasis on the 2.4 GHz channels."""
         self.channels = [
             ("1", 0.5),
-            ("6", 0.5),
+            ("6", 20.5),
             ("11", 0.5),
             ("36", 0.25),
             ("40", 0.25),
             ("44", 0.25),
             ("48", 0.25),
             ("1", 0.5),
-            ("6", 0.5),
+            ("6", 20.5),
             ("11", 0.5),
             ("149", 0.25),
             ("153", 0.25),
