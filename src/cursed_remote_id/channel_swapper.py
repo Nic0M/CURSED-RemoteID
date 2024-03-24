@@ -297,7 +297,7 @@ def setup_wifi_interface(mac_addr):
         raise subprocess.CalledProcessError from e
 
     # Get the physical interface name and the virtual interface name
-    regex_str = r"(phy\d+),(wlan\d+(?:mon)?)"
+    regex_str = r"(phy\d+) (wlan\d+(?:mon)?)"
     match = re.search(regex_str, output)
     if match:
         phy_name = match.group(1)  # Physical layer name
