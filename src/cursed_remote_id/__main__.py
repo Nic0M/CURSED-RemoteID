@@ -51,8 +51,8 @@ def all_requirements_installed():
 
     critical_protocols = [
         "opendroneid",
-        "opendroneid.basicid",
-        "opendroneid.location",
+        "opendroneid.message.basicid",
+        "opendroneid.message.location",
         "opendroneid.message.pack",
     ]
     for protocol in critical_protocols:
