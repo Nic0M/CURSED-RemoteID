@@ -21,13 +21,13 @@ def all_requirements_installed():
     cli_utilities = ["iw", "airmon-ng", "tshark"]
     for utility in cli_utilities:
         logger.info(f"Checking '{utility}' installation.")
-        cmd = ["command","-v",utility]
+        cmd = ["command", "-v", utility]
         try:
             output = subprocess.check_output(cmd)
         except subprocess.CalledProcessError:
             logger.error(f"Could not find {utility} command-line utility.")
             return False
-        logger.info(f"Found '{utility }' at '{output}'")
+        logger.info(f"Found '{utility}' at '{output}'")
 
     # Check if Open Drone ID Wireshark dissector is installed
     logger.info("Checking Open Drone ID dissector installation.")
@@ -44,7 +44,7 @@ def all_requirements_installed():
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running command {cmd}.")
         logger.error(f"STDOUT: {e.stdout}")
-        return  False
+        return False
 
     critical_protocols = [
         "opendroneid",
