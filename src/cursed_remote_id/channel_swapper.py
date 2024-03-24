@@ -24,10 +24,6 @@ class IllegalChannel(Exception):
     """Illegal Channel"""
 
 
-class CommandNotFound(Exception):
-    """Command Not Found"""
-
-
 class ChannelDictionary:
     """Object which contains information about recent Remote ID
     transmissions."""
@@ -258,9 +254,6 @@ def set_channel(mon, channel):
         elif "(-22)" in e.output:
             logger.error(f"Channel {channel} cannot be legally used.")
             raise IllegalChannel(channel)
-        elif e.returncode == 127:
-            logger.error("Command not found. Likely missing 'iw'")
-            raise CommandNotFound(set_channel_cmd)
         else:
             raise subprocess.CalledProcessError from e
     logger.info(f"Switched to channel {channel} successfully.")
@@ -274,61 +267,72 @@ def setup_wifi_interface(mac_addr):
 
     # Kill any network processes that might interfere with monitor mode
     check_kill_cmd = "sudo airmon-ng check kill"
+    logger.info(f"Running command: {check_kill_cmd}")
     try:
-        subprocess.run(check_kill_cmd, shell=True, check=True)
+        subprocess.run(
+            check_kill_cmd, shell=True, check=True,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error: {e}")
+        logger.error(f"STDOUT: {e.stdout}")
+        if "sudo: a password is required" in e.stdout:
+            logger.critical("Insufficient permission to run script.")
+            raise PermissionError
+        raise subprocess.CalledProcessError from e
+
+    wifi_card_driver = "mt76x0u"
+    logger.info("Checking for available interfaces.")
+    list_interfaces_cmd = f"sudo airmon-ng | awk '/{wifi_card_driver}" + \
+                          "/{print $1,$2}'"  # not f-string
+    logger.info(f"Running command: {list_interfaces_cmd}")
+    try:
+        output = subprocess.check_output(
+            list_interfaces_cmd, shell=True,
+            text=True, stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(e)
         logger.error(e.output)
         raise subprocess.CalledProcessError from e
 
-    # Possible interface names for the external Wi-Fi network card
-    long_interface_name = f"wlx{mac_addr}"
-    short_interface_name = "wlan1"  # wlan0 is the built-in Wi-Fi card on Pi
-    short_mon_interface_name = "wlan1mon"
-    # TODO: find number from iwconfig
+    # Get the physical interface name and the virtual interface name
+    regex_str = r"(phy\d+),(wlan\d+(?:mon)?)"
+    match = re.search(regex_str, output)
+    if match:
+        phy_name = match.group(1)  # Physical layer name
+        mon_name = match.group(2)  # Virtual interface name
+        # There could be more matches if multiple devices connected,
+        # but we'll stop on the first one
+    else:
+        logger.error(f"No regex match found in output with regex: {regex_str}")
+        logger.error(f"Output: {output}")
+        raise RuntimeError
+    logger.info(f"phy: {phy_name}, mon: {mon_name}")
 
-    cmd_long_name = f"sudo airmon-ng start {long_interface_name} 2>&1"
-    cmd_short_name = f"sudo airmon-ng start {short_interface_name} 2>&1"
-    cmd_short_mon_name = f"sudo airmon-ng start {short_mon_interface_name}" \
-        f" 2>&1"
-
-    logger.info(f"Trying to use long name: {cmd_long_name}")
+    # Start the interface in monitor mode
+    start_cmd = f"sudo airmon-ng start {mon_name}"
+    logger.info(f"Starting monitor mode: {mon_name}")
     try:
-        output = subprocess.check_output(cmd_long_name, shell=True, text=True)
+        output = subprocess.check_output(
+            start_cmd, shell=True, text=True,
+            stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"Error: {e}")
-        logger.error(f"STDOUT: {e.stdout.rstrip()}")
-        if "sudo: a password is required" in e.output:
-            logger.critical("Insufficient permission to run script.")
-            raise PermissionError
-        elif "command not found" in e.output:
-            logger.error(
-                "Ensure that airmon-ng is installed. "
-                "Try 'sudo apt install aircrack-ng'",
-            )
-            raise CommandNotFound("airmon-ng")
-        elif "No such device" in e.output:
-            logger.info(f"Trying to use short name: {cmd_short_name}")
-            try:
-                output = subprocess.check_output(
-                    cmd_short_name, shell=True, text=True,
-                )
-            except subprocess.CalledProcessError as exc:
-                logger.error(f"Error: {exc}")
-            logger.info(f"Trying to use mon name: {cmd_short_mon_name}")
-            try:
-                output = subprocess.check_output(
-                    cmd_short_name, shell=True, text=True,
-                )
-            except subprocess.CalledProcessError as exc:
-                logger.error(f"Error: {exc}")
+        logger.error(f"STDOUT: {e.stdout.strip()}\n")
+        if "No such device" in e.output:
+            raise RuntimeError from e
         raise subprocess.CalledProcessError from e
+    logger.info(f"OUTPUT: {output.strip()}\n")
 
     # Get the physical wireless interface name and the monitoring interface
     regex_str = r"\[(phy\d+)\](wlan\d+mon)"
     match = re.search(regex_str, output)
     if match:
-        phy_name = match.group(1)
+        if phy_name != match.group(1):
+            logger.info(f"Expected '{phy_name}' but found '{match.group(1)}'.")
+            raise RuntimeError
         mon_name = match.group(2)
     else:
         logger.error(f"No regex match found in output with regex: {regex_str}")
@@ -365,8 +369,6 @@ def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
                 channel_dict.remove(channel)
                 continue
             except InterfaceNoLongerInMonitorMode as e:
-                raise RuntimeError(e)
-            except CommandNotFound as e:
                 raise RuntimeError(e)
 
             time.sleep(scan_time)
