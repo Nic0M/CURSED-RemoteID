@@ -284,7 +284,7 @@ def setup_wifi_interface(mac_addr):
     wifi_card_driver = "mt76x0u"
     logger.info("Checking for available interfaces.")
     list_interfaces_cmd = f"sudo airmon-ng | awk '/{wifi_card_driver}" + \
-                          "/{print $1,$2}'"  # not f-string
+        "/{print $1,$2}'"  # not f-string
     logger.info(f"Running command: {list_interfaces_cmd}")
     try:
         output = subprocess.check_output(
