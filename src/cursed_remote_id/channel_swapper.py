@@ -170,22 +170,26 @@ def get_supported_channel_list(phy, mon):
     if not os.path.exists(phy_file_name):
         logger.error(f"Ensure that {phy_file_name} exists.")
         return None
-    phy_name_cmd = f"cat \"{phy_file_name}\" 2>&1"  # Prints file contents
+    phy_name_cmd = f"cat \"{phy_file_name}\""  # Prints file contents
     logger.info(f"Running command: {phy_name_cmd}")
     try:
-        output = subprocess.check_output(phy_name_cmd, shell=True, text=True)
+        output = subprocess.check_output(
+            phy_name_cmd, shell=True, text=True,
+            stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"CalledProcessError: {e}")
         logger.error(f"STDOUT: {e.stdout}")
         return None
     output = output.strip()
+    logger.info(f"STDOUT: {output}\n")
     if phy != output:
         logger.error(f"Given interface {phy} doesn't match {output}.")
         return None
 
     # Get the supported channels separated by new lines (from airmon-ng code)
     # Standard error is redirected to standard output
-    get_channels_cmd = f"iw phy {phy} channels 2>&1"
+    get_channels_cmd = f"sudo iw phy {phy} channels 2>&1"
 
     logger.info(f"Running command: {get_channels_cmd}")
     try:
@@ -238,20 +242,26 @@ def set_channel(mon, channel):
         )
         raise ValueError(channel)
 
-    set_channel_cmd = f"iw dev {mon} set channel {channel} 2>&1"
+    set_channel_cmd = f"sudo iw dev {mon} set channel {channel}"
     logger.info(f"Running command: {set_channel_cmd}")
     try:
-        subprocess.check_output(set_channel_cmd, shell=True, text=True)
+        subprocess.check_output(
+            set_channel_cmd, shell=True, text=True,
+            stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to switch to channel {channel}.")
-        logger.error(f"STDOUT: {e.stdout}")
+        logger.error(f"STDOUT: {e.stdout.strip()}\n")
+        if "(-1)" in e.output:
+            logger.error("Need permission to change network interface.")
+            raise PermissionError
         if "(-16)" in e.output:
             logger.error(
                 f"Interface {mon} is likely no longer in "
                 f"monitor mode.",
             )
             raise InterfaceNoLongerInMonitorMode(mon)
-        elif "(-22)" in e.output:
+        if "(-22)" in e.output:
             logger.error(f"Channel {channel} cannot be legally used.")
             raise IllegalChannel(channel)
         else:
@@ -324,7 +334,7 @@ def setup_wifi_interface(mac_addr):
         if "No such device" in e.output:
             raise RuntimeError from e
         raise subprocess.CalledProcessError from e
-    logger.info(f"OUTPUT: {output.strip()}\n")
+    logger.info(f"STDOUT:\n{output.strip()}\n")
 
     # Get the physical wireless interface name and the monitoring interface
     regex_str = r"\[(phy\d+)\](wlan\d+mon)"

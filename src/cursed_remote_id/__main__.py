@@ -32,6 +32,7 @@ def all_requirements_installed():
             return False
         logger.info(f"Found '{utility}' at '{output}'")
 
+    # TODO: add lua script from repo if not installed
     # Check if Open Drone ID Wireshark dissector is installed
     logger.info("Checking Open Drone ID dissector installation.")
     # List all protocols, find lines with 'opendroneid' case-insensitive
