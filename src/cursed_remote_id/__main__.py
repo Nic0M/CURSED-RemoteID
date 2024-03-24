@@ -16,14 +16,17 @@ import packet_logger
 
 
 def all_requirements_installed():
-    """Returns True if all required utilities are installed. Returns False otherwise"""
+    """Returns True if all required utilities are installed. Returns
+    False otherwise"""
 
     cli_utilities = ["iw", "airmon-ng", "tshark"]
     for utility in cli_utilities:
         logger.info(f"Checking '{utility}' installation.")
-        cmd = ["command", "-v", utility]
+        cmd = f"command -v {utility}"
         try:
-            output = subprocess.check_output(cmd)
+            output = subprocess.check_output(
+                cmd, shell=True, text=True,
+            ).strip()
         except subprocess.CalledProcessError:
             logger.error(f"Could not find {utility} command-line utility.")
             return False
@@ -39,7 +42,7 @@ def all_requirements_installed():
     try:
         output = subprocess.check_output(
             cmd, stderr=subprocess.STDOUT,
-            shell=True,
+            shell=True, text=True,
         )
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running command {cmd}.")
@@ -69,7 +72,7 @@ def all_requirements_installed():
         if protocol not in output:
             logger.warning(f"Missing optional protocol: {protocol}")
         else:
-            logger.info(f"Found optional protocl: {protocol}")
+            logger.info(f"Found optional protocol: {protocol}")
 
     return True
 

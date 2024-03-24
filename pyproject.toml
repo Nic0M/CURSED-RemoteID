@@ -1,3 +1,11 @@
 [tool.isort]
 line_length = 79
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.autopep8]
+max_line_length = 79
+ignore = []
+in-place = true
+recursive = true
+aggressive = 1
+verbose = 1
