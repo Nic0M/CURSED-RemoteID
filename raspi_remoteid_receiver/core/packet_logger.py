@@ -1,4 +1,5 @@
 import logging
+import threading
 import queue
 
 import pyshark
@@ -9,14 +10,19 @@ logger = logging.getLogger(__name__)
 class PacketLogger:
     """Class to keep stats on packets logged."""
 
-    def __init__(self, packet_queue):
+    def __init__(
+            self, packet_queue: queue.Queue, sigint_event: threading.Event,
+    ):
         self.total_packet_count = 0
         self.skipped_packet_count = 0
         self.packet_queue = packet_queue
+        self.sigint_event = sigint_event
 
     def put_in_queue(self, pkt):
         """Tries to put a packet into the packet queue. If the queue is full,
         the packet gets dropped."""
+        if self.sigint_event.is_set():
+            raise KeyboardInterrupt
         try:
             self.packet_queue.put(pkt, block=False)
         except queue.Full:
@@ -31,6 +37,7 @@ def packet_logger(
     packet_queue,
     use_wifi,
     use_bt,
+    sigint_event,
     packet_timeout=900,
     interface_timeout=60,
 ):
@@ -50,7 +57,8 @@ def packet_logger(
                 "to setup.",
             )
         else:
-            interfaces.append(wifi_interface)
+            if wifi_interface is not None:
+                interfaces.append(wifi_interface)
 
     # Wait for Bluetooth interface to be setup
     if use_bt:
@@ -62,7 +70,8 @@ def packet_logger(
                 "interface to setup.",
             )
         else:
-            interfaces.append(bt_interface)
+            if bt_interface is not None:
+                interfaces.append(bt_interface)
 
     # Check if interface list is empty
     if not interfaces:
@@ -80,13 +89,18 @@ def packet_logger(
         logger.error(f"Error setting up packet capture: {e}")
         return 1
 
-    pkt_logger = PacketLogger(packet_queue)
+    pkt_logger = PacketLogger(packet_queue, sigint_event)
     # Continuously put packets into the queue
     logger.info("Waiting for packets...")
     try:
         cap.apply_on_packets(pkt_logger.put_in_queue)
     except TimeoutError:  # TODO: implement timeout from packet_timeout
         logger.info("Timed out waiting for a new Remote ID packet.")
+    except KeyboardInterrupt as e:
+        if not sigint_event.is_set():
+            raise KeyboardInterrupt from e
+        logger.info("Detected SIGINT event set.")
+        return None
     finally:
         cap.close()
 
@@ -105,6 +119,7 @@ def main(
     use_wifi,
     use_bt,
     pcap_timeout_event,
+    sigint_event,
     packet_timeout=900,
     interface_timeout=60,
 ):
@@ -117,12 +132,12 @@ def main(
             packet_queue,
             use_wifi,
             use_bt,
+            sigint_event,
             packet_timeout,
             interface_timeout,
         )
     except Exception as e:
         logger.error(e)
-        pass
     finally:
         # Ensure that csv writer knows this thread terminated
         pcap_timeout_event.set()

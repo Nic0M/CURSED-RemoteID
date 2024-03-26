@@ -85,6 +85,7 @@ def upload_file(
 def uploader(
         file_queue: queue.Queue, bucket_name: str, max_error_count: int,
         csv_writer_exit_event: threading.Event,
+        sigint_event: threading.Event,
 ) -> None:
     """Main entry point for uploader thread."""
 
@@ -93,6 +94,10 @@ def uploader(
 
     upload_error_count = 0
     while upload_error_count < max_error_count:
+
+        # Keyboard interrupt caught in main thread
+        if sigint_event.is_set():
+            break
 
         # Only block if the csv_writer thread hasn't terminated
         if not csv_writer_exit_event.is_set():
@@ -131,4 +136,4 @@ def uploader(
             f"Total upload errors: {upload_error_count} exceeds maximum "
             f"allowed errors: {max_error_count}.",
         )
-    logger.info("Terminating thread.")
+    logger.info("Exiting thread...")

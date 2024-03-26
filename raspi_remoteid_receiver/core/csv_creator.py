@@ -1,5 +1,4 @@
 import csv
-import datetime
 import logging
 import os
 import queue
@@ -193,17 +192,21 @@ def create_row(pkt) -> list:
 def main(
     packet_queue: queue.Queue, upload_file_queue: queue.Queue,
     exit_event: threading.Event, sleep_event: threading.Event,
+    sigint_event: threading.Event,
     max_packet_count=100,
     max_elapsed_time=300,  # 5 minutes
     upload_file_queue_timeout=5,  # 5 seconds
     packet_timeout=120,  # 2 minutes of no Open Drone ID packets
-):
+) -> int:
     """Main entry point for CSV writer thread."""
 
     tmp_directory = clean_tmp_csv_directory()  # Housekeeping
 
     go_again = True
-    while go_again and not sleep_event.is_set():
+    while go_again:
+
+        if sleep_event.is_set():
+            break
 
         # Create a new .csv file with a unique hash for the filename
         base_name = "remote-id-" + str(uuid.uuid4()) + ".csv"
@@ -224,6 +227,9 @@ def main(
 
             while packet_count <= max_packet_count \
                     and elapsed_time < max_elapsed_time:
+                # Detected KeyboardInterrupt in main thread
+                if sigint_event.is_set():
+                    break
                 try:
                     packet = packet_queue.get(
                         timeout=packet_timeout,
@@ -255,6 +261,12 @@ def main(
 
             logger.info(f"Closing file with {packet_count} packets.")
 
+        if sigint_event.is_set():
+            logger.info(f"Detected SIGINT event. Deleting {file_name}")
+            helpers.safe_remove_csv(file_name)
+            logger.info("Exiting thread...")
+            return 0
+
         # Send file to be uploaded if not empty.
         if packet_count > 0:
             try:
@@ -272,9 +284,11 @@ def main(
             logger.info("Removing file with no packets.")
             helpers.safe_remove_csv(file_name)
 
-    logger.info("Terminating thread.")
+    logger.info("Exiting thread...")
 
     # Exit event is set before adding None element to queue to guarantee the
     # uploader will not block indefinitely on an empty queue
     exit_event.set()
     upload_file_queue.put(None)
+
+    return 0

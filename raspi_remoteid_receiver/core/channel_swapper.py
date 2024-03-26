@@ -285,13 +285,14 @@ def setup_wifi_interface() -> tuple[str, str]:
         )
     except subprocess.CalledProcessError as e:
         logger.error(f"Error: {e}")
-        logger.error(f"STDOUT: {e.stdout}")
+        if e.stdout is not None:
+            logger.error(f"STDOUT:\n{e.stdout.strip()}\n")
         if "sudo: a password is required" in e.stdout:
             logger.critical("Insufficient permission to run script.")
             raise PermissionError
         raise subprocess.CalledProcessError from e
 
-    wifi_card_driver = "mt76x0u"
+    wifi_card_driver = "mt76x0u"  # TODO: make this compatible with more devices
     logger.info("Checking for available interfaces.")
     list_interfaces_cmd = f"sudo airmon-ng | awk '/{wifi_card_driver}" + \
         "/{print $1,$2}'"  # not f-string
@@ -356,6 +357,7 @@ def setup_wifi_interface() -> tuple[str, str]:
 def wifi_channel_sweeper(
         phy: str, mon: str, channel_queue: queue.Queue,
         sleep_event: threading.Event,
+        sigint_event: threading.Event,
 ) -> None:
     """Sweeps through Wi-Fi channels and applies channel selection
     algorithm."""
@@ -368,6 +370,8 @@ def wifi_channel_sweeper(
     channel_dict = ChannelDictionary(channel_queue, supported_channels)
 
     while not sleep_event.is_set():
+        if sigint_event.is_set():
+            raise KeyboardInterrupt
         for channel, scan_time in channel_dict.get_channels():
             try:
                 set_channel(mon, channel)
@@ -394,7 +398,7 @@ def wifi_channel_sweeper(
 def main(
     wifi_interface_queue: queue.Queue, bt_interface_queue: queue.Queue,
     channel_queue: queue.Queue, use_wifi: bool, use_bt: bool,
-    sleep_event: threading.Event,
+    sleep_event: threading.Event, sigint_event: threading.Event,
 ) -> int:
     """Main entry point for channel selection thread."""
 
@@ -439,13 +443,19 @@ def main(
     if use_wifi:
         logger.info("Attempting to sweeping through Wi-Fi channels...")
         try:
-            wifi_channel_sweeper(phy, mon, channel_queue, sleep_event)
+            wifi_channel_sweeper(
+                phy, mon, channel_queue, sleep_event, sigint_event,
+            )
         except NoSupportedChannels:
             logger.critical("No supported channels to sweep through.")
             return 1
+        except KeyboardInterrupt as e:
+            if not sigint_event.is_set():
+                raise KeyboardInterrupt from e
+            logger.info("Detected SIGINT event set.")
         except Exception as e:
             logger.error(f"Error: {e}")
             return 1
 
-    logger.info("Exiting channel selection thread.")
+    logger.info("Exiting thread...")
     return 0

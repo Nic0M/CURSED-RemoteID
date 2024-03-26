@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -80,7 +81,7 @@ def main() -> int:
         logger.warning("This script may need to be run with root permissions.")
 
     # Check tshark and OpenDroneID installation
-    if not all_requirements_installed():
+    if not args.no_check_requirements and not all_requirements_installed():
         logger.critical("Missing requirements. Exiting...")
         return 1
 
@@ -98,6 +99,10 @@ def main() -> int:
     # Event to signal low power mode
     sleep_event = threading.Event()
     sleep_event.clear()
+    # KeyboardInterrupt event (SIGINT)
+    keyboard_interrupt_event = threading.Event()
+    keyboard_interrupt_event.clear()
+    # TODO: add this event to the threads
 
     # Queues to send interface names from setup thread to packet logger thread
     wifi_interface_queue = queue.Queue(maxsize=1)
@@ -116,6 +121,7 @@ def main() -> int:
             use_wifi,
             use_bt,
             sleep_event,
+            keyboard_interrupt_event,
         ),
     )
     logger.info("Starting channel swapper thread...")
@@ -140,6 +146,7 @@ def main() -> int:
             use_wifi,
             use_bt,
             pcap_timeout_event,
+            keyboard_interrupt_event,
             sleep_timeout,
             interface_setup_timeout,
         ),
@@ -161,10 +168,9 @@ def main() -> int:
             upload_file_queue,
             csv_writer_exit_event,
             sleep_event,
+            keyboard_interrupt_event,
         ),
     )
-    logger.info("Starting csv writer thread...")
-    csv_writer_thread.start()
 
     upload_bucket_name = args.bucket_name
     uploader_max_error_count = 5
@@ -175,9 +181,12 @@ def main() -> int:
             upload_bucket_name,
             uploader_max_error_count,
             csv_writer_exit_event,
+            keyboard_interrupt_event,
         ),
     )
 
+    logger.info("Starting csv writer thread...")
+    csv_writer_thread.start()
     if args.upload_to_aws:
         logger.info("Starting uploader thread...")
         uploader_thread.start()
@@ -185,6 +194,46 @@ def main() -> int:
         logger.info("Skipping upload. Set --upload-to-aws to enable upload")
 
     # TODO: sleep event
+
+    first_sigint = True
+
+    def sigint_handler(sig: int, frame) -> None:
+        if sig == signal.SIGINT:
+            nonlocal first_sigint
+            if not first_sigint:
+                os._exit(1)
+            print(
+                "\nCaught SIGINT, closing threads...",
+                file=sys.stderr, flush=True,
+            )
+            keyboard_interrupt_event.set()
+            # Unblock channel swapper thread
+            try:
+                wifi_interface_queue.put_nowait(None)
+            except queue.Full:
+                pass
+            try:
+                bluetooth_interface_queue.put_nowait(None)
+            except queue.Full:
+                pass
+            # Unblock packet logger thread
+            try:
+                packet_queue.put_nowait(None)
+            except queue.Full:
+                pass
+            # Unblock csv writer thread
+            try:
+                packet_queue.put_nowait(None)
+            except queue.Full:
+                pass
+            # Unblock uploader thread
+            try:
+                upload_file_queue.put_nowait(None)
+            except queue.Full:
+                pass
+            first_sigint = False
+
+    signal.signal(signal.SIGINT, sigint_handler)
 
     channel_swapper_thread.join()
     packet_logger_thread.join()
@@ -218,6 +267,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--bucket-name", type=str, default="cursed-remoteid-data",
         help="Amazon S3 bucket name. Default is 'cursed-remoteid-data'",
+    )
+    parser.add_argument(
+        "--no-check-requirements", action="store_true",
     )
 
     args = parser.parse_args()
