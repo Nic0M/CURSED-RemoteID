@@ -87,7 +87,7 @@ def packet_logger(
         )
     except Exception as e:
         logger.error(f"Error setting up packet capture: {e}")
-        return 1
+        raise Exception from e
 
     pkt_logger = PacketLogger(packet_queue, sigint_event)
     # Continuously put packets into the queue
@@ -120,6 +120,7 @@ def main(
     use_bt,
     pcap_timeout_event,
     sigint_event,
+    sleep_event,
     packet_timeout=900,
     interface_timeout=60,
 ):
@@ -141,6 +142,7 @@ def main(
     finally:
         # Ensure that csv writer knows this thread terminated
         pcap_timeout_event.set()
+        sleep_event.set()  # kill channel swapper
         try:
             packet_queue.put(None, block=False)
         except queue.Full:

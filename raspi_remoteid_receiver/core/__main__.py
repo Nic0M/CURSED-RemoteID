@@ -135,7 +135,7 @@ def main() -> int:
     pcap_timeout_event.clear()
 
     sleep_timeout = 3600  # 1 hour
-    interface_setup_timeout = 5  # 30 seconds
+    interface_setup_timeout = 30  # 30 seconds
 
     packet_logger_thread = threading.Thread(
         target=packet_logger.main,
@@ -147,6 +147,7 @@ def main() -> int:
             use_bt,
             pcap_timeout_event,
             keyboard_interrupt_event,
+            sleep_event,
             sleep_timeout,
             interface_setup_timeout,
         ),
