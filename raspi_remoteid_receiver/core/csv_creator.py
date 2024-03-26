@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def clean_tmp_csv_directory() -> pathlib.Path:
+    """Chooses a temporary directory to store CSV files. If the directory
+    already exists, removes any existing old CSV files from previous runs.
+    Returns the file path of the temporary directory.
+    """
     os_name = os.name
     match os_name:
         case "posix":
@@ -94,7 +98,19 @@ def is_valid_src_addr(src_addr: str) -> bool:
 
 
 def create_row(pkt) -> list:
-    """Creates a table of elements corresponding to one row of the CSV."""
+    """Creates a table of elements corresponding to one row of the CSV.
+    It looks like PyShark generates the format of the packet by taking the
+    display filter for that field from Wireshark and replacing all periods
+    with underscores, case-insensitive.
+    This filter can be found by right-clicking on the desired field and
+    selecting Copy > Field Name
+    The field names appear to be generated somehow from the .lua script names,
+    but I can't figure out how it works—the names don't seem to exactly match.
+    Ex:
+        OpenDroneID.loc_geoAlt --> opendroneid_loc_geoalt
+        opendroneid.message.operatorid --> opendroneid_message_operatorid
+
+    """
 
     # Determine if Bluetooth or Wi-Fi packet
     try:
@@ -154,8 +170,7 @@ def create_row(pkt) -> list:
     # Check if drone is time traveling to the future
     # (usually happens when no GPS lock)
     now = round(time.time())  # number of seconds since epoch
-    if now < remote_id_utc_timestamp:
-        remote_id_utc_timestamp = now
+    remote_id_utc_timestamp = min(remote_id_utc_timestamp, now)
     timestamp = time.strftime(
         '%Y-%m-%d %H:%M:%S',
         time.gmtime(remote_id_utc_timestamp),
@@ -172,14 +187,106 @@ def create_row(pkt) -> list:
     except AttributeError:
         raise MissingPacketFieldError("Something in location message")
 
-    geo_alt = 0
-    speed_acc = 0
-    horz_acc = 0
-    geo_vert_acc = 0
-    baro_alt = 0
-    baro_alt_acc = 0
-    height = 0
-    height_type = 0
+    # Geodetic Altitude
+    try:
+        geo_alt = opendroneid_data.opendroneid_loc_geoalt
+    except AttributeError:
+        raise MissingPacketFieldError("Missing Geodetic Altitude")
+    else:
+        # Value should be an int
+        geo_alt = int(geo_alt)
+
+    # Geodetic Vertical Accuracy
+    try:
+        geo_vert_acc = opendroneid_data.opendroneid_loc_vaccuracy
+    except AttributeError:
+        raise MissingPacketFieldError("Missing Geodetic Vertical Accuracy")
+    else:
+        # Value should be an int between 0 and 15
+        geo_vert_acc = int(geo_vert_acc)  # can raise ValueError or TypeError
+        if not 0 <= geo_vert_acc <= 15:
+            # TODO: maybe set to 0 (equivalent to '>= 10m/s' or 'unknown')
+            #  instead of raising error
+            raise InvalidPacketFieldError("Geodetic Vertical Accuracy")
+
+    # Speed Accuracy
+    try:
+        speed_acc = opendroneid_data.opendroneid_loc_speedaccuracy
+    except AttributeError:
+        raise MissingPacketFieldError("Missing Speed Accuracy")
+    else:
+        speed_acc = int(speed_acc)
+        if speed_acc > 15:
+            logger.warning("Invalid speed accuracy. Setting to unknown.")
+            speed_acc = 0
+        if speed_acc > 4:
+            logger.warning("Reserved speed accuracy in ASTM F3411-22a.")
+        if speed_acc < 0:
+            logger.warning(
+                "Negative speed accuracy. Possible conversion"
+                "error from unsigned int to signed int.",
+            )
+            speed_acc = 0
+
+    # Horizontal Accuracy
+    try:
+        horz_acc = opendroneid_data.opendroneid_loc_haccuracy
+    except AttributeError:
+        raise MissingPacketFieldError("Missing Horizontal Accuracy")
+    else:
+        horz_acc = int(horz_acc)
+        if not 0 <= horz_acc <= 15:
+            logger.warning("Invalid horizontal accuracy. Setting to unknown.")
+            horz_acc = 0
+
+    # Barometric Altitude (optional in ASTM F3411-22a)
+    try:
+        baro_alt = opendroneid_data.opendroneid_loc_pressalt  # pressure alt
+    except AttributeError:
+        # If Invalid, No Value, or Unknown => -1000 m
+        baro_alt = -1000
+    else:
+        baro_alt = int(baro_alt)
+        if baro_alt > 31767:  # 31767 is max 16-bit signed int 32767 - 1000
+            # This should not be possible
+            logger.warning("Invalid barometric altitude, exceeds int16 value.")
+            baro_alt = -1000
+        else:
+            # TODO: conversion in standard, based on observation, some drones
+            #  may not be compliant
+            baro_alt = (baro_alt + 1000) / 2
+
+    try:
+        baro_alt_acc = opendroneid_data.opendroneid_loc_baroaccuracy
+    except AttributeError:
+        # Is optional
+        baro_alt_acc = 0
+    else:
+        baro_alt_acc = int(baro_alt_acc)
+        # TODO: Check if baro accuracy is also int16 in ASTM F3411-22a
+        if not 0 <= baro_alt_acc <= 15:
+            baro_alt_acc = 0
+
+    try:
+        height = opendroneid_data.opendroneid_loc_height
+    except AttributeError:
+        # Field is optional, don't throw error if missing
+        height = -1000
+    else:
+        height = int(height)
+        if not -1000 <= height <= 31767:  # see altitudes
+            height = -1000
+        else:
+            height = (height + 1000) / 2
+
+    try:
+        height_type = opendroneid_data.opendroneid_loc_flag_heighttype
+    except AttributeError:
+        # Field is optional, don't throw error if missing
+        height_type = 0
+    else:
+        if height_type not in (0, 1):
+            height_type = 0
 
     row = [
         src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
