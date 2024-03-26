@@ -370,9 +370,9 @@ def wifi_channel_sweeper(
     channel_dict = ChannelDictionary(channel_queue, supported_channels)
 
     while not sleep_event.is_set():
-        if sigint_event.is_set():
-            raise KeyboardInterrupt
         for channel, scan_time in channel_dict.get_channels():
+            if sigint_event.is_set():
+                raise KeyboardInterrupt
             try:
                 set_channel(mon, channel)
             except IllegalChannel:
