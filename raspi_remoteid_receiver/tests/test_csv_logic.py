@@ -138,6 +138,9 @@ class CreateRowTestCase(unittest.TestCase):
             [
                 "Source Address", "Unique ID", "Timestamp", "Heading",
                 "Ground Speed", "Vertical Speed", "Latitude", "Longitude",
+                "Geodetic Altitude", "Speed Accuracy", "Horizontal Accuracy",
+                "Geodetic Vertical Accuracy", "Barometric Altitude",
+                "Barometric Altitude Accuracy", "Height", "Height Type",
             ],
             "header row does not match",
         )
@@ -161,6 +164,10 @@ class CreateRowTestCase(unittest.TestCase):
         #     csv_module_under_test.create_row,
         #     self.generate_default_packet(src_addr="abracadabra")
         # )
+
+    def test_create_data_row_len(self):
+        """Verifies length of row and header are the same."""
+        # TODO:
 
 
 if __name__ == "__main__":

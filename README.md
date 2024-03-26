@@ -87,6 +87,39 @@ Make sure the region matches the region of the S3 bucket you created.
 > region = us-east-2
 > ```
 
+### Lambda function permissions
+Create a new policy. In the JSON editor, paste these permissions.
+Change `<your-bucket-name>` to the name of your bucket.
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowS3Access",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::<your-bucket-name>/*"
+            ]
+        }
+    ]
+}
+```
+Create a role for an AWS Service, then choose Lambda.
+Add the policy you just created to the role.
+
+Create a Python Lambda function and for the execution role, choose the role you just created.
+Now select upload from a `.zip` file.
+Choose the `lambda_insert_into_database_deployment_package.zip` located in the directory
+`~/CURSED-RemoteID/lambda_src/lambda_insert_into_database/`.
+Copy and paste the `lambda_function.py` file from that same directory into the lambda function code source.
+
+#### TODO:
+Assign a trigger and create RDS database.
+
 ## Running tests
 ```shell
 cd ~/CURSED-RemoteID

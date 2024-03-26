@@ -53,6 +53,9 @@ def clean_tmp_csv_directory() -> pathlib.Path:
 header_row = [
     "Source Address", "Unique ID", "Timestamp", "Heading",
     "Ground Speed", "Vertical Speed", "Latitude", "Longitude",
+    "Geodetic Altitude", "Speed Accuracy", "Horizontal Accuracy",
+    "Geodetic Vertical Accuracy", "Barometric Altitude",
+    "Barometric Altitude Accuracy", "Height", "Height Type",
 ]
 
 
@@ -101,18 +104,21 @@ def create_row(pkt) -> list:
         try:
             src_addr = pkt.wlan.sa_resolved
         except AttributeError:
+            logger.info("Missing Source Address")
             raise MissingPacketFieldError("Missing Source Address")
         src_addr = "MAC-" + src_addr
     else:
         src_addr = "BDA-" + src_addr
     src_addr = src_addr.upper()
     if not is_valid_src_addr(src_addr):
+        logger.info(f"Invalid Source Address {src_addr}")
         raise InvalidPacketFieldError(f"Invalid Source Address: {src_addr}")
 
     # Get Open Drone ID information
     try:
         opendroneid_data = pkt.opendroneid
     except AttributeError:
+        logger.info("Open Drone ID Data")
         raise MissingPacketFieldError("Missing Open Drone ID Protocol")
 
     # Unique ID
@@ -125,25 +131,29 @@ def create_row(pkt) -> list:
     unique_id = re.sub(r"[^0-9a-zA-Z_\- ]+", "", unique_id).strip()
     # ASTM F3411-22a Basic ID numbers should be max 20 characters
     if len(unique_id) > 20:
+        logger.info(f"Invalid Unique ID: {unique_id}")
         raise InvalidPacketFieldError(f"Invalid Unique ID: {unique_id}")
 
     # Timestamp
     try:
         epoch_timestamp = pkt.frame_info.time_epoch
     except AttributeError:
+        logger.info("Missing Epoch Time")
         raise MissingPacketFieldError("Missing Epoch Timestamp")
     try:
         time_since_utc_hour = opendroneid_data.opendroneid_loc_timestamp
     except AttributeError:
+        logger.info("Missing UTC Time Since Hour")
         raise MissingPacketFieldError("Missing Location Message Timestamp")
     epoch_timestamp = float(epoch_timestamp)
+    time_since_utc_hour = int(time_since_utc_hour)
     remote_id_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) \
-        + int(time_since_utc_hour) // 10
+        + time_since_utc_hour // 10
     timestamp = time.strftime(
         '%Y-%m-%d %H:%M:%S',
         time.gmtime(remote_id_utc_timestamp),
     )
-    timestamp += "." + time_since_utc_hour % 10
+    timestamp += "." + str(time_since_utc_hour % 10)
 
     # Other
     try:
@@ -155,9 +165,19 @@ def create_row(pkt) -> list:
     except AttributeError:
         raise MissingPacketFieldError("Something in location message")
 
+    geo_alt = 0
+    speed_acc = 0
+    horz_acc = 0
+    geo_vert_acc = 0
+    baro_alt = 0
+    baro_alt_acc = 0
+    height = 0
+    height_type = 0
+
     row = [
         src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
-        lat, lon,
+        lat, lon, geo_alt, speed_acc, horz_acc, geo_vert_acc, baro_alt,
+        baro_alt_acc, height, height_type,
     ]
     return row
 
@@ -215,10 +235,10 @@ def main(
                 try:
                     row = create_row(packet)
                 except PacketError as e:
-                    logger.error(f"Error parsing packet: {e}")
+                    logger.error(f"Error parsing packet: {repr(e)}")
                     continue
                 except TypeError as e:
-                    logger.error(f"Error parsing packet: {e}")
+                    logger.error(f"TypeError when parsing packet: {repr(e)}")
                     continue
                 writer.writerow(row)
 

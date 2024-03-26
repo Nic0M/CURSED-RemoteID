@@ -135,7 +135,6 @@ def lambda_handler(event, context):
     """
     global conn  # this variable can get updated in the lambda_handler function
     global s3_client
-    global index_map
 
     logging.info(f"Received event: {json.dumps(event, indent=2)}")
 
@@ -242,6 +241,7 @@ def lambda_handler(event, context):
             geo_alt_idx = None
             geo_vert_acc_idx = None
             baro_alt_idx = None
+            baro_alt_acc_idx = None
             height_idx = None
             height_type_idx = None
 
@@ -282,6 +282,8 @@ def lambda_handler(event, context):
                                 geo_vert_acc_idx = idx
                             case "Barometric Altitude":
                                 baro_alt_idx = idx
+                            case "Barometric Altitude Accuracy":
+                                baro_alt_acc_idx = idx
                             # Height above ground level (AGL) or above takeoff
                             # location
                             case "Height":
@@ -346,12 +348,15 @@ def lambda_handler(event, context):
                     # ASTM F3411-22a. Empty string "" has a value of False.
                     if not data[baro_alt_idx]:
                         baro_alt = "NULL"
+                    else:
+                        baro_alt = data[baro_alt_idx]
                     if data[height_idx] and data[height_type_idx]:
                         height = float(data[height_idx])
                         height_type = data[height_type_idx]
                     else:
                         height = "NULL"
                         height_type = "NULL"
+                    # TODO: barometric altitude accuracy
                 except ValueError as e:
                     skipped_packets += 1
                     continue
@@ -416,8 +421,30 @@ def lambda_handler(event, context):
 
     logger.info(
         f"Queried {queried_packets:d} packets."
-        f"Skipped {skipped_packets:}.",
+        f"Skipped {skipped_packets:d}.",
     )
+
+    # Delete object from bucket
+    try:
+        response = s3_client.delete_object(
+            Bucket=bucket,
+            Key=key,
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error when removing file {key}: {e}")
+        logger.error(f"Ensure you have the s3:DeleteObject permission.")
+    else:
+        deleted = response.get("DeleteMarker")
+        if deleted is not None:
+            if deleted:
+                logger.info("Successfully deleted file.")
+            else:
+                logger.info(
+                    "Failed to delete file. Make sure the Lambda function has"
+                    "the s3:DeleteObject permission. If the bucket is"
+                    "versioned, you need the s3:DeleteObjectVersion"
+                    "permission.",
+                )
 
     return {
         "StatusCode": 200,
