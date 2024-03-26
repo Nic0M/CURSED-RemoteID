@@ -3,6 +3,7 @@ import os
 import queue
 import re
 import subprocess
+import threading
 import time
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class ChannelDictionary:
     """Object which contains information about recent Remote ID
     transmissions."""
 
-    def __init__(self, channel_queue, supported_channels):
+    def __init__(self, channel_queue: queue.Queue, supported_channels: list):
         self.queue = channel_queue
         self.supported_channels = supported_channels
 
@@ -93,11 +94,11 @@ class ChannelDictionary:
         # TODO: do something with the number of Remote ID packets received on
         # TODO: each channel
 
-    def get_channels(self):
+    def get_channels(self) -> list:
         """Returns a list of the current channels to sweep through."""
         return self.channels
 
-    def remove(self, channel):
+    def remove(self, channel: str) -> None:
         """Removes a channel from the channel sweep and supported channel
         list."""
         self.supported_channels = [
@@ -110,7 +111,7 @@ class ChannelDictionary:
         ]
 
 
-def sanitize_physical_interface_name(phy_name):
+def sanitize_physical_interface_name(phy_name: str) -> str:
     """Sanitizes interface name. Throws InvalidInterfaceName error if invalid.
     Example valid interface names:
     - phy0
@@ -128,7 +129,7 @@ def sanitize_physical_interface_name(phy_name):
     return interface_name
 
 
-def sanitize_mon_interface_name(mon_name):
+def sanitize_mon_interface_name(mon_name: str) -> str:
     """Sanitizes interface name. Throws InvalidInterfaceName error if invalid.
     Example valid interface names:
     - wlan0
@@ -148,7 +149,7 @@ def sanitize_mon_interface_name(mon_name):
     return interface_name
 
 
-def get_supported_channel_list(phy, mon):
+def get_supported_channel_list(phy: str, mon: str) -> list | None:
     """Returns the list of channels that the network interface supports.
     Returns None if there are no supported channels.
     """
@@ -227,12 +228,11 @@ def get_supported_channel_list(phy, mon):
     return supported_channels_list
 
 
-def set_channel(mon, channel):
+def set_channel(mon: str, channel: str) -> str:
     """Tries to set the given monitor mode interface to the given channel.
     Throws an error if unsuccessful."""
 
     mon = sanitize_mon_interface_name(mon)
-    channel = str(channel)
 
     # Sanitize channel input since running with shell=True
     if not channel.isdigit():
@@ -270,7 +270,7 @@ def set_channel(mon, channel):
     return channel
 
 
-def setup_wifi_interface(mac_addr):
+def setup_wifi_interface() -> tuple[str, str]:
     """Tries to set up the Wi-Fi monitor mode interface. Returns the
     physical wireless interface name and the monitor interface name if
     successful. Otherwise, throws an error."""
@@ -307,7 +307,8 @@ def setup_wifi_interface(mac_addr):
         raise subprocess.CalledProcessError from e
 
     # Get the physical interface name and the virtual interface name
-    regex_str = r"(phy\d+) (wlan\d+(?:mon)?)"
+    # Match phy<num>, then wlan<num>, wlan<num>mon, or wlx<mac-addr>
+    regex_str = r"(phy\d+) (wlan\d+(?:mon)?|wlx[0-9a-zA-Z]{12})"
     match = re.search(regex_str, output)
     if match:
         phy_name = match.group(1)  # Physical layer name
@@ -352,7 +353,10 @@ def setup_wifi_interface(mac_addr):
     return phy_name, mon_name
 
 
-def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
+def wifi_channel_sweeper(
+        phy: str, mon: str, channel_queue: queue.Queue,
+        sleep_event: threading.Event,
+) -> None:
     """Sweeps through Wi-Fi channels and applies channel selection
     algorithm."""
 
@@ -385,13 +389,13 @@ def wifi_channel_sweeper(phy, mon, channel_queue, sleep_event):
         channel_dict.update()
 
     logger.info("Sleep event received.")
-    return None
 
 
 def main(
-    mac_addr, wifi_interface_queue, bt_interface_queue, channel_queue,
-    use_wifi, use_bt, sleep_event,
-):
+    wifi_interface_queue: queue.Queue, bt_interface_queue: queue.Queue,
+    channel_queue: queue.Queue, use_wifi: bool, use_bt: bool,
+    sleep_event: threading.Event,
+) -> int:
     """Main entry point for channel selection thread."""
 
     logger.info("Started channel selection thread.")
@@ -399,7 +403,7 @@ def main(
     if use_wifi:
         # Try to set up Wi-Fi interface
         try:
-            phy, mon = setup_wifi_interface(mac_addr)
+            phy, mon = setup_wifi_interface()
         except Exception as e:
             logger.critical(f"Error setting up Wi-Fi interface: {e}")
             return 1

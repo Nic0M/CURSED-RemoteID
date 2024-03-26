@@ -85,7 +85,7 @@ else:
 s3_client = create_s3_client()
 
 
-def execute_query(query, cursor):
+def execute_query(query: str, cursor) -> None:
     """Executes a SQL query. Raises RuntimeError if database connection
     closes."""
 
@@ -414,8 +414,10 @@ def lambda_handler(event, context):
 
             # TODO: send HTTP POST TO Trackserver plugin
 
-    logger.info(f"Queried {queried_packets:d} packets."
-                f"Skipped {skipped_packets:}.")
+    logger.info(
+        f"Queried {queried_packets:d} packets."
+        f"Skipped {skipped_packets:}.",
+    )
 
     return {
         "StatusCode": 200,

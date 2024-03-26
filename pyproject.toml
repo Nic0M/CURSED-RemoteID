@@ -1,3 +1,18 @@
+[project]
+name = "raspi-remoteid-receiver"
+version = "1.0.0"
+authors = [
+    {name = "Nico Madrid"},
+    {name = "Mitchell Buck"},
+    {name = "Max Fairchild"},
+    {name = "Joseph Hunter"},
+    {name = "Contributors: Anthony Maurello, Blake Hannum, Robert Karbowiak, Hector Rubi"},
+]
+requires-python = ">= 3.10"
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+
+
 [tool.isort]
 line_length = 79
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]

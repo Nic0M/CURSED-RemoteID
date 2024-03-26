@@ -1,5 +1,7 @@
 import logging
 import os
+import pathlib
+import threading
 import queue
 
 # AWS modules
@@ -7,12 +9,12 @@ import boto3
 import botocore.exceptions
 
 # Local modules
-import helpers
+from raspi_remoteid_receiver.core import helpers
 
 logger = logging.getLogger(__name__)
 
 
-def create_s3_client():
+def create_s3_client() -> boto3.client:
     r"""Creates a boto3 client to communicate with Amazon Simple Storage
     Service (S3). Requires AWS config and credentials in
     the .aws folder in the home directory.
@@ -39,7 +41,10 @@ def create_s3_client():
     return boto3.client("s3")
 
 
-def upload_file(s3_client, file_name, bucket, object_name=None):
+def upload_file(
+        s3_client: boto3.client, file_name: pathlib.Path,
+        bucket: str, object_name=None,
+) -> bool:
     r"""Upload a file to an S3 bucket. Requires AWS credentials setup. See
     create_s3_client() for details.
 
@@ -78,53 +83,52 @@ def upload_file(s3_client, file_name, bucket, object_name=None):
 
 
 def uploader(
-    file_queue, bucket_name, remove_files, max_error_count,
-    csv_writer_exit_event,
-):
+        file_queue: queue.Queue, bucket_name: str, max_error_count: int,
+        csv_writer_exit_event: threading.Event,
+) -> None:
     """Main entry point for uploader thread."""
 
-    thread_logger = logging.getLogger("uploader-thread")
-    thread_logger.setLevel(logging.INFO)
-
-    thread_logger.info("Creating S3 client.")
+    logger.info("Creating S3 client.")
     s3_client = create_s3_client()
 
-    error_count = 0
-    while error_count < max_error_count:
+    upload_error_count = 0
+    while upload_error_count < max_error_count:
+
         # Only block if the csv_writer thread hasn't terminated
         if not csv_writer_exit_event.is_set():
-            file_name = file_queue.get()  # Blocks if the queue is empty
+            file_name = file_queue.get()
         else:
             try:
                 file_name = file_queue.get(block=False)
             except queue.Empty:
-                thread_logger.info("Queue is empty and csv_writer has exited")
+                logger.debug("Queue is empty and csv_writer has exited")
                 break
 
+        # Exit if receive None object
         if file_name is None:
-            thread_logger.info("Received termination message from queue.")
+            logger.info("Received termination message from queue.")
             break
+
+        # Attempt to upload the file
         if os.path.exists(file_name):
             uploaded = upload_file(s3_client, file_name, bucket_name)
             if not uploaded:
-                error_count += 1
-                thread_logger.error(
-                    f"Failed to upload file {file_name}. "
-                    f"Total errors: {error_count}",
+                upload_error_count += 1
+                logger.error(
+                    f"Failed to upload file '{file_name}'. "
+                    f"Total upload errors: {upload_error_count}",
                 )
-            if remove_files:
-                helpers.safe_remove(file_name)
+            else:
+                logger.info(f"Uploaded file '{file_name}' successfully.")
+            logger.info(f"Removing file: '{file_name}'")
+            helpers.safe_remove_csv(file_name)
         else:
-            error_count += 1
-            thread_logger.error(
-                f"File {file_name} doesn't exist. Cannot "
-                f"upload the file. Total Errors: "
-                f"{error_count}.",
+            logger.error(
+                f"File '{file_name}' doesn't exist. Cannot upload the file.",
             )
-    if error_count >= max_error_count:
-        thread_logger.error(
-            f"Total errors: {error_count} exceeds maximum "
+    if upload_error_count >= max_error_count:
+        logger.error(
+            f"Total upload errors: {upload_error_count} exceeds maximum "
             f"allowed errors: {max_error_count}.",
         )
-    thread_logger.info("Terminating thread.")
-    return None
+    logger.info("Terminating thread.")

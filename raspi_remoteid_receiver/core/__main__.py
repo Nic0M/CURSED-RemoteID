@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import argparse
 import logging
 import os
@@ -8,14 +7,10 @@ import sys
 import threading
 
 # Local files
-import setup_logging
-import aws_communicator
-import channel_swapper
-import csv_creator
-import packet_logger
+from raspi_remoteid_receiver.core import setup_logging, aws_communicator, channel_swapper, csv_creator, packet_logger
 
 
-def all_requirements_installed():
+def all_requirements_installed() -> bool:
     """Returns True if all required utilities are installed. Returns
     False otherwise"""
 
@@ -60,8 +55,7 @@ def all_requirements_installed():
         if protocol not in output:
             logger.error(f"Missing Open Drone ID protocol: {protocol}")
             return False
-        else:
-            logger.info(f"Found Open Drone ID protocol: {protocol}")
+        logger.info(f"Found Open Drone ID protocol: {protocol}")
 
     non_critical_protocols = [
         "opendroneid.message.authentication",
@@ -78,7 +72,7 @@ def all_requirements_installed():
     return True
 
 
-def main():
+def main() -> int:
     """Main script for setting up threads."""
 
     # Check if script was run with sudo/root permissions
@@ -113,12 +107,9 @@ def main():
     # logger thread
     channel_queue = queue.Queue(maxsize=1000)
 
-    mac_addr = "00c0cab400dd"
-
     channel_swapper_thread = threading.Thread(
         target=channel_swapper.main,
         args=(
-            mac_addr,
             wifi_interface_queue,
             bluetooth_interface_queue,
             channel_queue,
@@ -164,36 +155,43 @@ def main():
     csv_writer_exit_event.clear()
 
     csv_writer_thread = threading.Thread(
-        target=csv_creator.csv_writer,
+        target=csv_creator.main,
         args=(
             packet_queue,
             upload_file_queue,
             csv_writer_exit_event,
+            sleep_event,
         ),
     )
     logger.info("Starting csv writer thread...")
     csv_writer_thread.start()
 
-    upload_bucket_name = "cursed-remoteid-data"
-    remove_uploaded_files = False
+    upload_bucket_name = args.bucket_name
     uploader_max_error_count = 5
     uploader_thread = threading.Thread(
         target=aws_communicator.uploader,
         args=(
             upload_file_queue,
             upload_bucket_name,
-            remove_uploaded_files,
             uploader_max_error_count,
             csv_writer_exit_event,
         ),
     )
-    logger.info("Starting uploader thread...")
-    # uploader_thread.start()  # TODO: uncomment when ready to push to AWS
+
+    if args.upload_to_aws:
+        logger.info("Starting uploader thread...")
+        uploader_thread.start()
+    else:
+        logger.info("Skipping upload. Set --upload-to-aws to enable upload")
+
+    # TODO: sleep event
 
     channel_swapper_thread.join()
     packet_logger_thread.join()
     csv_writer_thread.join()
-    uploader_thread.join()
+
+    if args.upload_to_aws:
+        uploader_thread.join()
 
     logger.info("All threads joined. Exiting...")
     return 0
@@ -214,6 +212,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--disable-wifi", action="store_true")
     parser.add_argument("--disable-bt", action="store_true")
+    parser.add_argument(
+        "--upload-to-aws", action=argparse.BooleanOptionalAction,
+    )
+    parser.add_argument(
+        "--bucket-name", type=str, default="cursed-remoteid-data",
+        help="Amazon S3 bucket name. Default is 'cursed-remoteid-data'",
+    )
 
     args = parser.parse_args()
 

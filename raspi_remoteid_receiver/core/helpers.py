@@ -5,7 +5,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def safe_remove(file_name):
+def safe_remove_csv(file_name):
     """Permanently deletes the file at 'file_name'"""
     if Path(file_name).suffix != ".csv":
         logger.error(

@@ -3,23 +3,24 @@ import logging
 import os
 import queue
 import re
+import threading
 import time
 import uuid
-from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
+import pathlib
 
 # Local files
-import helpers
+from raspi_remoteid_receiver.core import helpers
 
 logger = logging.getLogger(__name__)
 
 
-def clean_tmp_csv_directory():
+def clean_tmp_csv_directory() -> pathlib.Path:
     os_name = os.name
     match os_name:
         case "posix":
-            tmp_directory = PurePosixPath("/var", "tmp")
+            tmp_directory = pathlib.PurePosixPath("/var", "tmp")
         case "nt":
-            tmp_directory = PureWindowsPath(
+            tmp_directory = pathlib.PureWindowsPath(
                 "C:", "Users", "AppData", "Local",
                 "Temp",
             )
@@ -28,8 +29,8 @@ def clean_tmp_csv_directory():
                 f"Unknown OS {os_name}. Using current directory to "
                 f"store temporary files.",
             )
-            tmp_directory = ""
-    tmp_directory = Path(tmp_directory, "remote-id-data")
+            tmp_directory = "tmp"
+    tmp_directory = pathlib.Path(tmp_directory, "remote-id-data")
     logger.info(f"Storing temporary files in {tmp_directory}")
     try:
         tmp_directory.mkdir(parents=True, exist_ok=False)
@@ -38,11 +39,13 @@ def clean_tmp_csv_directory():
         # If the folder exists, there may be leftover files from a previous run
         for (dir_name, _, base_names) in os.walk(
             tmp_directory,
-            followlinks=False,
+            followlinks=False,  # don't follow symlinks
         ):
             # Delete all files in the tmp directory
             for base_name in base_names:
-                helpers.safe_remove(PurePath(dir_name, base_name))
+                file_path = pathlib.PurePath(dir_name, base_name)
+                logger.info(f"Removing file: '{file_path}'")
+                helpers.safe_remove_csv(file_path)
             break  # Don't recursively walk through directories
     return tmp_directory
 
@@ -53,71 +56,94 @@ header_row = [
 ]
 
 
-class InvalidRemoteIDPacketError(Exception):
-    """Packet does not use the Open Drone ID protocol."""
+class PacketError(Exception):
+    """Packet does not use the Open Drone ID protocol or is invalid."""
 
 
-class MissingSourceAddressError(InvalidRemoteIDPacketError):
-    """Packet is missing the source address."""
+class MissingPacketFieldError(PacketError):
+    """Packet is missing a required field."""
 
 
-class MissingRemoteIDInformationError(InvalidRemoteIDPacketError):
-    """Packet is missing Remote ID information."""
+class InvalidPacketFieldError(PacketError):
+    """Packet is missing a required field."""
 
 
-class MissingUniqueIDError(InvalidRemoteIDPacketError):
-    """Packet is missing Unique ID found in the Open Drone ID
-    (Basic ID message)."""
+def is_valid_src_addr(src_addr: str) -> bool:
+    """Returns True if a valid source address string. Returns False otherwise.
+    Valid source addresses are MAC addresses or Bluetooth Device Addresses.
+    There should be a prefix of either 'MAC-' or 'BDA-' followed by
+    12 upper case hexadecimal characters, separated by a colon every 2 digits.
+
+    **** INPUT MUST BE UPPER CASE ****
+    Valid:
+        MAC-FF:FF:FF:FF:FF:FF
+        BDA-00:11:22:33:44:55
+    Invalid:
+        MAC-ff:ff:ff:ff:ff:ff
+        bda-00:11:22:33:44:55
+    """
+    if src_addr is None:
+        return False
+    match = re.match(
+        r'\A(?:MAC|BDA)-(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\Z', src_addr,
+    )
+    return match is not None
 
 
-class MissingTimestampError(InvalidRemoteIDPacketError):
-    """Packet is missing a UTC timestamp or the timestamp since the UTC hour
-    in the Open Drone ID (Location Message)"""
-
-
-def create_row(pkt):
+def create_row(pkt) -> list:
     """Creates a table of elements corresponding to one row of the CSV."""
+
     # Determine if Bluetooth or Wi-Fi packet
     try:
+        # TODO: see if this works for Bluetooth 4 legacy packets
         src_addr = pkt.btle.advertising_address
     except AttributeError:
         try:
             src_addr = pkt.wlan.sa_resolved
         except AttributeError:
-            raise MissingSourceAddressError
+            raise MissingPacketFieldError("Missing Source Address")
+        src_addr = "MAC-" + src_addr
+    else:
+        src_addr = "BDA-" + src_addr
+    src_addr = src_addr.upper()
+    if not is_valid_src_addr(src_addr):
+        raise InvalidPacketFieldError(f"Invalid Source Address: {src_addr}")
 
     # Get Open Drone ID information
     try:
         opendroneid_data = pkt.opendroneid
     except AttributeError:
-        raise MissingRemoteIDInformationError
+        raise MissingPacketFieldError("Missing Open Drone ID Protocol")
 
     # Unique ID
     try:
         unique_id = opendroneid_data.opendroneid_basicid_id_asc
     except AttributeError:
-        raise MissingUniqueIDError
+        raise MissingPacketFieldError("Missing Unique ID")
+    # Remove non-alphanumeric characters and strip whitespace
     unique_id = str(unique_id)
-    # Remove non-word characters (everything that is not a letter, underscore,
-    # number or dash)
-    unique_id = re.sub(r"[^\w-]+", "", unique_id)
-    # ASTM F3411-22a Basic ID numbers should be 20 characters or less
+    unique_id = re.sub(r"[^0-9a-zA-Z_\- ]+", "", unique_id).strip()
+    # ASTM F3411-22a Basic ID numbers should be max 20 characters
     if len(unique_id) > 20:
-        unique_id = unique_id[0:20]
+        raise InvalidPacketFieldError(f"Invalid Unique ID: {unique_id}")
 
     # Timestamp
     try:
         epoch_timestamp = pkt.frame_info.time_epoch
+    except AttributeError:
+        raise MissingPacketFieldError("Missing Epoch Timestamp")
+    try:
         time_since_utc_hour = opendroneid_data.opendroneid_loc_timestamp
     except AttributeError:
-        raise MissingTimestampError
+        raise MissingPacketFieldError("Missing Location Message Timestamp")
     epoch_timestamp = float(epoch_timestamp)
-    remoteid_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) \
+    remote_id_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) \
         + int(time_since_utc_hour) // 10
     timestamp = time.strftime(
         '%Y-%m-%d %H:%M:%S',
-        time.gmtime(remoteid_utc_timestamp),
+        time.gmtime(remote_id_utc_timestamp),
     )
+    timestamp += "." + time_since_utc_hour % 10
 
     # Other
     try:
@@ -127,10 +153,7 @@ def create_row(pkt):
         lat = opendroneid_data.opendroneid_loc_lat
         lon = opendroneid_data.opendroneid_loc_lon
     except AttributeError:
-        raise InvalidRemoteIDPacketError
-
-    # if lat <= 0 and lon == 0:
-    #     raise InvalidRemoteIDPacketError
+        raise MissingPacketFieldError("Something in location message")
 
     row = [
         src_addr, unique_id, timestamp, heading, gnd_speed, vert_speed,
@@ -139,31 +162,29 @@ def create_row(pkt):
     return row
 
 
-def csv_writer(
-    packet_queue, upload_file_queue, exit_event,
+def main(
+    packet_queue: queue.Queue, upload_file_queue: queue.Queue,
+    exit_event: threading.Event, sleep_event: threading.Event,
     max_packet_count=100,
     max_elapsed_time=300,  # 5 minutes
-    max_error_count=10,
     upload_file_queue_timeout=5,  # 5 seconds
     packet_timeout=120,  # 2 minutes of no Open Drone ID packets
 ):
     """Main entry point for CSV writer thread."""
 
-    logger.info("Cleaning .csv file temporary directory.")
-    tmp_directory = clean_tmp_csv_directory()
+    tmp_directory = clean_tmp_csv_directory()  # Housekeeping
 
-    error_count = 0
-    # while error_count < max_error_count: # TODO: implement
-    if True:
+    go_again = True
+    while go_again and not sleep_event.is_set():
 
         # Create a new .csv file with a unique hash for the filename
         base_name = "remote-id-" + str(uuid.uuid4()) + ".csv"
-        file_name = PurePath(tmp_directory, base_name)
+        file_name = pathlib.PurePath(tmp_directory, base_name)
 
-        packet_count = 0
+        packet_count = 0  # number of packets in the current csv file
 
         # 'w' creates the file if it doesn't already exist and overwrites any
-        # existing data if the file already exists
+        # existing data if the file already exists (which it shouldn't)
         with open(file_name, 'w', newline='', encoding="utf-8") as csv_file:
             logger.info(f"Opened file {file_name}")
             writer = csv.writer(csv_file)
@@ -175,26 +196,29 @@ def csv_writer(
 
             while packet_count <= max_packet_count \
                     and elapsed_time < max_elapsed_time:
-
                 try:
                     packet = packet_queue.get(
                         timeout=packet_timeout,
                     )  # Blocks until next packet is received
                 except queue.Empty:
                     logger.info("Timed out waiting for packet queue.")
+                    go_again = False
                     break
 
                 if packet is None:
                     logger.info(
-                        "Received termination message from packet "
-                        "queue.",
+                        "Received termination message from packet queue.",
                     )
+                    go_again = False
                     break
 
                 try:
                     row = create_row(packet)
-                except InvalidRemoteIDPacketError as e:
-                    logger.error(f"Error parsing packet: {repr(e)}")
+                except PacketError as e:
+                    logger.error(f"Error parsing packet: {e}")
+                    continue
+                except TypeError as e:
+                    logger.error(f"Error parsing packet: {e}")
                     continue
                 writer.writerow(row)
 
@@ -215,16 +239,10 @@ def csv_writer(
                     f"Upload file queue is full, skipping "
                     f"file {file_name}.",
                 )
-                helpers.safe_remove(file_name)
+                helpers.safe_remove_csv(file_name)
         else:
             logger.info("Removing file with no packets.")
-            helpers.safe_remove(file_name)
-
-    if error_count >= max_error_count:
-        logger.error(
-            f"Total errors: {error_count} exceeds the maximum "
-            f"allowable errors: {max_error_count}.",
-        )
+            helpers.safe_remove_csv(file_name)
 
     logger.info("Terminating thread.")
 
