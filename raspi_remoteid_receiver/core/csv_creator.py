@@ -1,4 +1,5 @@
 import csv
+import datetime
 import logging
 import os
 import queue
@@ -141,14 +142,21 @@ def create_row(pkt) -> list:
         logger.info("Missing Epoch Time")
         raise MissingPacketFieldError("Missing Epoch Timestamp")
     try:
+        # This value is in tenths of seconds
+        # Ex: 3611 corresponds to 6 minutes 1.1 seconds
         time_since_utc_hour = opendroneid_data.opendroneid_loc_timestamp
     except AttributeError:
         logger.info("Missing UTC Time Since Hour")
         raise MissingPacketFieldError("Missing Location Message Timestamp")
     epoch_timestamp = float(epoch_timestamp)
-    time_since_utc_hour = int(time_since_utc_hour)
+    time_since_utc_hour = int(time_since_utc_hour) % 3600
     remote_id_utc_timestamp = epoch_timestamp - (epoch_timestamp % 3600) \
         + time_since_utc_hour // 10
+    # Check if drone is time traveling to the future
+    # (usually happens when no GPS lock)
+    now = round(time.time())  # number of seconds since epoch
+    if now < remote_id_utc_timestamp:
+        remote_id_utc_timestamp = now
     timestamp = time.strftime(
         '%Y-%m-%d %H:%M:%S',
         time.gmtime(remote_id_utc_timestamp),

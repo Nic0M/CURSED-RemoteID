@@ -89,6 +89,7 @@ def execute_query(query: str, cursor) -> None:
     """Executes a SQL query. Raises RuntimeError if database connection
     closes."""
 
+    logger.info("Executing Query: %s" % query)
     try:
         cursor.execute(query)
     except pymysql.err.IntegrityError as e:
@@ -247,6 +248,7 @@ def lambda_handler(event, context):
 
             rows = file_body.split("\n")
             first_row = True
+            prev_src_addr = []
             for row in rows:
                 data = row.replace("\r", "").split(",")
                 # Header column row
@@ -370,6 +372,24 @@ def lambda_handler(event, context):
                     height = "NULL"
                     height_type = "NULL"
 
+                # Only add to drone list if it's a source address we haven't
+                # seen in this upload yet
+                if src_addr not in prev_src_addr:
+                    sql_query = (
+                        f"INSERT INTO {drone_list_table} ("
+                        f"src_addr, unique_id, lastTime) "
+                        f"VALUES ('{src_addr:s}', '{unique_id:s}', "
+                        f"'{timestamp:s}'"
+                        f") ON DUPLICATE KEY UPDATE "
+                        f"lastTime = '{timestamp:s}';"  # this may not be true
+                    )
+                    try:
+                        sql_query_queue.put(sql_query, block=False)
+                    except queue.Full:
+                        skipped_packets += 1
+                        continue
+                    prev_src_addr.append(src_addr)
+
                 sql_query = (
                     f"INSERT INTO {remote_id_data_table} ("
                     f"src_addr, unique_id, timestamp, "
@@ -425,6 +445,7 @@ def lambda_handler(event, context):
     )
 
     # Delete object from bucket
+    logger.info(f"Deleting file '{key}'")
     try:
         response = s3_client.delete_object(
             Bucket=bucket,
@@ -445,6 +466,8 @@ def lambda_handler(event, context):
                     "versioned, you need the s3:DeleteObjectVersion"
                     "permission.",
                 )
+
+    # TODO: insert into active flights
 
     return {
         "StatusCode": 200,
