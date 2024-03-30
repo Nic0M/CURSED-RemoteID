@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import os
 import queue
 import re
@@ -402,10 +403,11 @@ def main(
     wifi_interface_queue: queue.Queue, bt_interface_queue: queue.Queue,
     channel_queue: queue.Queue, use_wifi: bool, use_bt: bool,
     sleep_event: threading.Event, sigint_event: threading.Event,
+    log_queue: multiprocessing.Queue,
 ) -> int:
     """Main entry point for channel selection thread."""
 
-    logger = setup_logging.get_process_logger(__name__)
+    logger = setup_logging.get_logger(__name__, log_queue)
 
     logger.info("Started channel selection thread.")
 

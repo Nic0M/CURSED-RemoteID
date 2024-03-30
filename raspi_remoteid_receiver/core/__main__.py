@@ -134,6 +134,7 @@ def main() -> int:
             use_bt,
             sleep_event,
             keyboard_interrupt_event,
+            log_queue,
         ),
     )
     logger.info("Starting channel swapper thread...")
@@ -152,6 +153,8 @@ def main() -> int:
         wifi_interface_queue=wifi_interface_queue,
         bt_interface_queue=bluetooth_interface_queue,
         packet_queue=packet_queue,
+        log_queue=log_queue,
+        logging_level=root_logging_level,
         use_wifi=use_wifi,
         use_bt=use_bt,
         pcap_timeout_event=pcap_timeout_event,
@@ -171,6 +174,7 @@ def main() -> int:
 
     csv_writer_thread = csv_creator.CSVCreatorThread(
         packet_queue=packet_queue,
+        log_queue=log_queue,
         upload_file_queue=upload_file_queue,
         exit_event=csv_writer_exit_event,
         sleep_event=sleep_event,
@@ -187,6 +191,7 @@ def main() -> int:
             uploader_max_error_count,
             csv_writer_exit_event,
             keyboard_interrupt_event,
+            log_queue,
         ),
     )
 
@@ -297,8 +302,11 @@ if __name__ == "__main__":
         console_logging_level = logging.DEBUG
         file_logging_level = logging.DEBUG
 
+    log_queue = multiprocessing.Queue()
+
     # Set up logging format
     queue_listener = setup_logging.setup_logging(
+        log_queue=log_queue,
         root_level=root_logging_level,
         console_level=console_logging_level,
         file_level=file_logging_level,
@@ -307,7 +315,7 @@ if __name__ == "__main__":
     queue_listener.start()
 
     # Set up main script logging
-    logger = setup_logging.get_process_logger(__name__)
+    logger = setup_logging.get_logger(__name__, log_queue)
 
     logger.info("Running main script.")
 

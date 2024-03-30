@@ -17,6 +17,8 @@ class PacketLoggerProcess(multiprocessing.Process):
             self, wifi_interface_queue: multiprocessing.Queue,
             bt_interface_queue: multiprocessing.Queue,
             packet_queue: multiprocessing.Queue,  # TODO: change to Pipe
+            log_queue: multiprocessing.Queue,
+            logging_level: int,
             use_wifi: bool, use_bt: bool,
             pcap_timeout_event: multiprocessing.Event,
             sleep_event: multiprocessing.Event,
@@ -31,6 +33,11 @@ class PacketLoggerProcess(multiprocessing.Process):
         self.bt_interface_queue = bt_interface_queue
         self.packet_queue = packet_queue
 
+        # Logging
+        self.log_queue = log_queue
+        self.logging_level = logging_level
+        self.verbose_output = logging_level <= logging.INFO
+
         self.use_wifi = use_wifi
         self.use_bt = use_bt
         self.pcap_timeout_event = pcap_timeout_event
@@ -41,13 +48,18 @@ class PacketLoggerProcess(multiprocessing.Process):
 
         self.interfaces = []
         self.cap = None
-        self.logger = setup_logging.get_process_logger(__name__)
-        setup_logging.logging_test(self.logger)
+        self.logger = None
 
         self.total_packets = 0
         self.skipped_packets = 0
-        self.verbose_output = self.logger.isEnabledFor(logging.INFO)
+        self.verbose_output = False
         self.watchdog = None
+
+    def setup_logger(self):
+        self.logger = setup_logging.get_logger(
+            __name__, self.log_queue, logging_level=logging.INFO,
+        )
+        setup_logging.logging_test(self.logger)
 
     def start_watchdog(self):
         """Creates a daemon thread which sends a SIGALRM signal to the
@@ -183,6 +195,7 @@ class PacketLoggerProcess(multiprocessing.Process):
                 raise TimeoutError
 
     def run(self) -> None:
+        self.setup_logger()
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGALRM, self.signal_handler)
         try:

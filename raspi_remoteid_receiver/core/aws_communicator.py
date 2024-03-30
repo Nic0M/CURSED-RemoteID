@@ -86,10 +86,11 @@ def uploader(
         file_queue: queue.Queue, bucket_name: str, max_error_count: int,
         csv_writer_exit_event: threading.Event,
         sigint_event: threading.Event,
+        log_queue,
 ) -> None:
     """Main entry point for uploader thread."""
 
-    logger = setup_logging.get_process_logger(__name__)
+    logger = setup_logging.get_logger(__name__, log_queue)
 
     logger.info("Creating S3 client.")
     s3_client = create_s3_client()
@@ -130,7 +131,7 @@ def uploader(
             else:
                 logger.info(f"Uploaded file '{file_name}' successfully.")
             logger.info(f"Removing file: '{file_name}'")
-            helpers.safe_remove_csv(file_name)
+            helpers.safe_remove_csv(file_name, logger)
         else:
             logger.error(
                 f"File '{file_name}' doesn't exist. Cannot upload the file.",

@@ -3,13 +3,6 @@ import logging.handlers
 import multiprocessing
 from pathlib import Path
 
-log_queue = None
-
-
-def initialize_log_queue() -> multiprocessing.Queue:
-    """Creates a multiprocessing Queue"""
-    return multiprocessing.Queue()
-
 
 def get_logging_formatter() -> logging.Formatter:
     # Format the log message
@@ -24,13 +17,22 @@ def get_logging_formatter() -> logging.Formatter:
 
 
 def setup_logging(
+    *,
+    log_queue: multiprocessing.Queue,
     root_level: int = logging.DEBUG,
     console_level: int = logging.WARNING,
     file_level: int = logging.INFO,
     log_file: str = "logs/debug.log",
 ) -> logging.handlers.QueueListener:
-    """Configures logging"""
-    global log_queue
+    """Configures logging.
+
+    :param log_queue: Required keyword argument.
+    :param root_level: Minimum logging level that all loggers inherit from
+    :param console_level: Logging level to console.
+    :param file_level: Logging level to file.
+    :param log_file: Name of log file (with relative path)
+    :return: QueueListener handler with console and file output
+    """
 
     # Set the root logging level. No other loggers can log a message below this
     # level
@@ -38,9 +40,6 @@ def setup_logging(
     root_logger.setLevel(root_level)
 
     formatter = get_logging_formatter()
-
-    if log_queue is None:
-        log_queue = initialize_log_queue()
 
     queue_handler = logging.handlers.QueueHandler(log_queue)
     queue_handler.setFormatter(formatter)
@@ -72,15 +71,18 @@ def setup_logging(
     return queue_listener
 
 
-def get_process_logger(name: str) -> logging.Logger:
+def get_logger(
+        name: str,
+        log_queue: multiprocessing.Queue,
+        logging_level: int | None = None,
+) -> logging.Logger:
     """Returns a logger that uses the log queue for safe logging in multiple
     processes."""
-    global log_queue
-    if log_queue is None:
-        log_queue = initialize_log_queue()
     queue_handler = logging.handlers.QueueHandler(log_queue)
     logger = logging.getLogger(name)
     logger.addHandler(queue_handler)
+    if logging_level is not None:
+        logger.setLevel(logging_level)
     logger.propagate = False
     return logger
 

@@ -60,6 +60,7 @@ class CSVCreatorThread(threading.Thread):
     def __init__(
             self,
             packet_queue: multiprocessing.Queue,
+            log_queue: multiprocessing.Queue,
             upload_file_queue: queue.Queue,
             exit_event: threading.Event,
             sleep_event: threading.Event,
@@ -81,7 +82,7 @@ class CSVCreatorThread(threading.Thread):
         self._upload_file_queue_timeout = upload_file_queue_timeout
         self._packet_timeout = packet_timeout
 
-        self.logger = setup_logging.get_process_logger(__name__)
+        self.logger = setup_logging.get_logger(__name__, log_queue)
         self.tmp_directory = None
 
     def run(self):
@@ -156,7 +157,7 @@ class CSVCreatorThread(threading.Thread):
                 self.logger.info(
                     f"Detected SIGINT event. Deleting {file_name}",
                 )
-                helpers.safe_remove_csv(file_name)
+                helpers.safe_remove_csv(file_name, self.logger)
                 self.logger.info("Exiting thread...")
                 return None
 
@@ -173,10 +174,10 @@ class CSVCreatorThread(threading.Thread):
                         f"Upload file queue is full, skipping "
                         f"file '{file_name}'.",
                     )
-                    helpers.safe_remove_csv(file_name)
+                    helpers.safe_remove_csv(file_name, self.logger)
             else:
                 self.logger.info("Removing file with no packets.")
-                helpers.safe_remove_csv(file_name)
+                helpers.safe_remove_csv(file_name, self.logger)
 
         # Exit event is set before adding None element to queue to guarantee
         # the uploader will not block indefinitely on an empty queue
@@ -233,7 +234,7 @@ class CSVCreatorThread(threading.Thread):
                 for base_name in base_names:
                     file_path = pathlib.PurePath(dir_name, base_name)
                     self.logger.info(f"Removing file: '{file_path}'")
-                    helpers.safe_remove_csv(file_path)
+                    helpers.safe_remove_csv(file_path, self.logger)
                 break  # Don't recursively walk through directories
 
     def create_row(self, pkt) -> list:

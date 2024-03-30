@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 import threading
@@ -61,10 +62,9 @@ class WatchdogTimer(threading.Thread):
         return self._lock
 
 
-def safe_remove_csv(file_name: str) -> True:
+def safe_remove_csv(file_name: str, logger: logging.Logger) -> True:
     """Permanently deletes the file at 'file_name'. Returns True if deleted,
     returns False otherwise."""
-    logger = setup_logging.get_process_logger(__name__)
     if Path(file_name).suffix != ".csv":
         logger.error(
             f"safe_remove: detected file extension is not .csv. "
