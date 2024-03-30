@@ -9,9 +9,7 @@ import boto3
 import botocore.exceptions
 
 # Local modules
-from raspi_remoteid_receiver.core import helpers
-
-logger = logging.getLogger(__name__)
+from raspi_remoteid_receiver.core import helpers, setup_logging
 
 
 def create_s3_client() -> boto3.client:
@@ -43,7 +41,7 @@ def create_s3_client() -> boto3.client:
 
 def upload_file(
         s3_client: boto3.client, file_name: pathlib.Path,
-        bucket: str, object_name=None,
+        bucket: str, object_name=None, logger=logging.getLogger(__name__),
 ) -> bool:
     r"""Upload a file to an S3 bucket. Requires AWS credentials setup. See
     create_s3_client() for details.
@@ -60,6 +58,8 @@ def upload_file(
     '2024-02-29/data1.csv'). If the object name is not specified, then the
     basename of the file is used (e.g. data1.csv), and the file is uploaded to
     the root directory of the bucket.
+
+    :param logger: Logger object. TODO: change default value
 
     :return: True if file was uploaded, else False
     """
@@ -89,6 +89,8 @@ def uploader(
 ) -> None:
     """Main entry point for uploader thread."""
 
+    logger = setup_logging.get_process_logger(__name__)
+
     logger.info("Creating S3 client.")
     s3_client = create_s3_client()
 
@@ -116,7 +118,9 @@ def uploader(
 
         # Attempt to upload the file
         if os.path.exists(file_name):
-            uploaded = upload_file(s3_client, file_name, bucket_name)
+            uploaded = upload_file(
+                s3_client, file_name, bucket_name, logger=logger,
+            )
             if not uploaded:
                 upload_error_count += 1
                 logger.error(

@@ -1,5 +1,6 @@
 import argparse
-import logging
+import logging.handlers
+import multiprocessing
 import os
 import queue
 import signal
@@ -24,7 +25,21 @@ def all_requirements_installed() -> bool:
                 cmd, shell=True, text=True,
             ).strip()
         except subprocess.CalledProcessError:
-            logger.error(f"Could not find {utility} command-line utility.")
+            error_msg = f"Could not find '{utility}' command-line utility."
+            match utility:
+                case "iw":
+                    help_msg = "Try 'sudo apt install iw'."
+                case "airmon-ng":
+                    help_msg = "Try 'sudo apt install aircrack-ng'."
+                case "tshark":
+                    help_msg = (
+                        "Try 'sudo apt install tshark'. "
+                        "If Wireshark is already installed, try adding the"
+                        "tshark binary executable to PATH."
+                    )
+                case _:
+                    help_msg = ""
+            logger.error(f"{error_msg} {help_msg}")
             return False
         logger.info(f"Found '{utility}' at '{output}'")
 
@@ -97,16 +112,13 @@ def main() -> int:
         return 1
 
     # Event to signal low power mode
-    sleep_event = threading.Event()
-    sleep_event.clear()
+    sleep_event = multiprocessing.Event()
     # KeyboardInterrupt event (SIGINT)
     keyboard_interrupt_event = threading.Event()
-    keyboard_interrupt_event.clear()
-    # TODO: add this event to the threads
 
     # Queues to send interface names from setup thread to packet logger thread
-    wifi_interface_queue = queue.Queue(maxsize=1)
-    bluetooth_interface_queue = queue.Queue(maxsize=1)
+    wifi_interface_queue = multiprocessing.Queue(maxsize=1)
+    bluetooth_interface_queue = multiprocessing.Queue(maxsize=1)
 
     # Queue to receive channels with Remote ID packets from the packet
     # logger thread
@@ -128,32 +140,27 @@ def main() -> int:
     channel_swapper_thread.start()
 
     # Queue to send packets from packet logger to csv writer thread
-    packet_queue = queue.Queue(maxsize=1000)
+    packet_queue = multiprocessing.Queue(maxsize=1000)
 
     # Packet time out event
-    pcap_timeout_event = threading.Event()
-    pcap_timeout_event.clear()
+    pcap_timeout_event = multiprocessing.Event()
 
     sleep_timeout = 3600  # 1 hour
     interface_setup_timeout = 30  # 30 seconds
 
-    packet_logger_thread = threading.Thread(
-        target=packet_logger.main,
-        args=(
-            wifi_interface_queue,
-            bluetooth_interface_queue,
-            packet_queue,
-            use_wifi,
-            use_bt,
-            pcap_timeout_event,
-            keyboard_interrupt_event,
-            sleep_event,
-            sleep_timeout,
-            interface_setup_timeout,
-        ),
+    packet_logger_process = packet_logger.PacketLoggerProcess(
+        wifi_interface_queue=wifi_interface_queue,
+        bt_interface_queue=bluetooth_interface_queue,
+        packet_queue=packet_queue,
+        use_wifi=use_wifi,
+        use_bt=use_bt,
+        pcap_timeout_event=pcap_timeout_event,
+        sleep_event=sleep_event,
+        sleep_timeout=sleep_timeout,
+        interface_timeout=interface_setup_timeout,
     )
-    logger.info("Starting packet logger thread...")
-    packet_logger_thread.start()
+    logger.info("Starting packet logger process")
+    packet_logger_process.start()
 
     # Queue for indicating which files need to be uploaded to the cloud
     upload_file_queue = queue.Queue(maxsize=10)
@@ -162,15 +169,12 @@ def main() -> int:
     csv_writer_exit_event = threading.Event()
     csv_writer_exit_event.clear()
 
-    csv_writer_thread = threading.Thread(
-        target=csv_creator.main,
-        args=(
-            packet_queue,
-            upload_file_queue,
-            csv_writer_exit_event,
-            sleep_event,
-            keyboard_interrupt_event,
-        ),
+    csv_writer_thread = csv_creator.CSVCreatorThread(
+        packet_queue=packet_queue,
+        upload_file_queue=upload_file_queue,
+        exit_event=csv_writer_exit_event,
+        sleep_event=sleep_event,
+        sigint_event=keyboard_interrupt_event,
     )
 
     upload_bucket_name = args.bucket_name
@@ -192,7 +196,7 @@ def main() -> int:
         logger.info("Starting uploader thread...")
         uploader_thread.start()
     else:
-        logger.info("Skipping upload. Set --upload-to-aws to enable upload")
+        logger.warning("Skipping upload. Set --upload-to-aws to enable upload")
 
     # TODO: sleep event
 
@@ -202,7 +206,10 @@ def main() -> int:
         if sig == signal.SIGINT:
             nonlocal first_sigint
             if not first_sigint:
+                # Kill all processes with no cleanup
+                packet_logger_process.kill()
                 os._exit(1)
+            # Send SIGINT signal is automatically sent to all processes
             print(
                 "\nCaught SIGINT, closing threads...",
                 file=sys.stderr, flush=True,
@@ -237,17 +244,20 @@ def main() -> int:
     signal.signal(signal.SIGINT, sigint_handler)
 
     channel_swapper_thread.join()
-    packet_logger_thread.join()
+    packet_logger_process.join()
     csv_writer_thread.join()
 
     if args.upload_to_aws:
         uploader_thread.join()
 
-    logger.info("All threads joined. Exiting...")
+    logger.info("All non-daemon threads joined. Exiting...")
     return 0
 
 
 if __name__ == "__main__":
+    # if this is "fork", then all processes need to be started before any
+    # threads are started
+    multiprocessing.set_start_method("spawn")
 
     # Create command line arguments
     parser = argparse.ArgumentParser(
@@ -280,7 +290,7 @@ if __name__ == "__main__":
     if args.verbose:
         console_logging_level = logging.INFO
     else:
-        console_logging_level = logging.ERROR
+        console_logging_level = logging.WARNING
     file_logging_level = logging.INFO
     if args.debug:  # debug flag takes priority over verbose flag
         root_logging_level = logging.DEBUG
@@ -288,15 +298,22 @@ if __name__ == "__main__":
         file_logging_level = logging.DEBUG
 
     # Set up logging format
-    setup_logging.setup_logging(
+    queue_listener = setup_logging.setup_logging(
         root_level=root_logging_level,
         console_level=console_logging_level,
         file_level=file_logging_level,
         log_file=args.log_file,
     )
+    queue_listener.start()
 
     # Set up main script logging
-    logger = logging.getLogger(__name__)
+    logger = setup_logging.get_process_logger(__name__)
 
     logger.info("Running main script.")
-    sys.exit(main())
+
+    exit_code = main()
+
+    # Stop the queue listener
+    queue_listener.stop()
+
+    sys.exit(exit_code)

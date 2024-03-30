@@ -6,7 +6,7 @@ import subprocess
 import threading
 import time
 
-logger = logging.getLogger(__name__)
+from raspi_remoteid_receiver.core import setup_logging
 
 
 class InvalidInterfaceName(Exception):
@@ -149,7 +149,9 @@ def sanitize_mon_interface_name(mon_name: str) -> str:
     return interface_name
 
 
-def get_supported_channel_list(phy: str, mon: str) -> list | None:
+def get_supported_channel_list(
+        phy: str, mon: str, logger: logging.Logger,
+) -> list | None:
     """Returns the list of channels that the network interface supports.
     Returns None if there are no supported channels.
     """
@@ -228,7 +230,7 @@ def get_supported_channel_list(phy: str, mon: str) -> list | None:
     return supported_channels_list
 
 
-def set_channel(mon: str, channel: str) -> str:
+def set_channel(mon: str, channel: str, logger: logging.Logger) -> str:
     """Tries to set the given monitor mode interface to the given channel.
     Throws an error if unsuccessful."""
 
@@ -270,7 +272,7 @@ def set_channel(mon: str, channel: str) -> str:
     return channel
 
 
-def setup_wifi_interface() -> tuple[str, str]:
+def setup_wifi_interface(logger: logging.Logger) -> tuple[str, str]:
     """Tries to set up the Wi-Fi monitor mode interface. Returns the
     physical wireless interface name and the monitor interface name if
     successful. Otherwise, throws an error."""
@@ -358,11 +360,12 @@ def wifi_channel_sweeper(
         phy: str, mon: str, channel_queue: queue.Queue,
         sleep_event: threading.Event,
         sigint_event: threading.Event,
+        logger: logging.Logger,
 ) -> None:
     """Sweeps through Wi-Fi channels and applies channel selection
     algorithm."""
 
-    supported_channels = get_supported_channel_list(phy, mon)
+    supported_channels = get_supported_channel_list(phy, mon, logger)
     if supported_channels is None:
         raise NoSupportedChannels(str((phy, mon)))
 
@@ -374,7 +377,7 @@ def wifi_channel_sweeper(
             if sigint_event.is_set():
                 raise KeyboardInterrupt
             try:
-                set_channel(mon, channel)
+                set_channel(mon, channel, logger)
             except IllegalChannel:
                 logger.error(
                     f"Removing illegal channel {channel} from "
@@ -402,12 +405,14 @@ def main(
 ) -> int:
     """Main entry point for channel selection thread."""
 
+    logger = setup_logging.get_process_logger(__name__)
+
     logger.info("Started channel selection thread.")
 
     if use_wifi:
         # Try to set up Wi-Fi interface
         try:
-            phy, mon = setup_wifi_interface()
+            phy, mon = setup_wifi_interface(logger)
         except Exception as e:
             logger.critical(f"Error setting up Wi-Fi interface: {e}")
             return 1
@@ -444,7 +449,7 @@ def main(
         logger.info("Attempting to sweeping through Wi-Fi channels...")
         try:
             wifi_channel_sweeper(
-                phy, mon, channel_queue, sleep_event, sigint_event,
+                phy, mon, channel_queue, sleep_event, sigint_event, logger,
             )
         except NoSupportedChannels:
             logger.critical("No supported channels to sweep through.")

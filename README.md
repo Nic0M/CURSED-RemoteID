@@ -173,3 +173,6 @@ python -m raspi_remoteid_receiver.core --no-upload-to-aws
 - `-v`, `--verbose` enables verbose console output
 - `--debug` enables debug logging
 - `--log-file` specifies a log file location (default is `'logs/debug.log'`)
+
+## Running the script on boot
+WIP
