@@ -52,7 +52,6 @@ class PacketLoggerProcess(multiprocessing.Process):
 
         self.total_packets = 0
         self.skipped_packets = 0
-        self.verbose_output = False
         self.watchdog = None
 
     def setup_logger(self):
