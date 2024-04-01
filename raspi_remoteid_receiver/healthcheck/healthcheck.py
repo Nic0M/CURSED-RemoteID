@@ -242,7 +242,8 @@ class Healthcheck:
             self._logger.error(msg)
             raise ValueError(msg)
         if not re.match(
-                r"^[A-Za-z0-9+/]*={0,2}$", base64_key_str):  # not URL safe characters
+            r"^[A-Za-z0-9+/]*={0,2}$",
+                base64_key_str):  # not URL safe characters
             self._logger.error("Invalid base64 key: '%s'", base64_key_str)
             raise ValueError(f"Invalid base64 key in file: '{file}'")
         print(base64_key_str, flush=True)

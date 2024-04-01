@@ -10,16 +10,13 @@ class GetHS256SignatureStrTestCase(unittest.TestCase):
 
     def test_key_is_str_of_zeros(self):
         key = "00000000000000000000000000000000"
-        tests = [
-            {
-                "msg": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiIyMTQ3NDgzNjQ3In0",
-                "sig": "Oz_lnbf2cpaM9RNPgyGISkb-OaK26An5UqaH2eR0LyQ",
-            },
-            {
-                "msg": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MTE5NDEwODMsImV4cCI6MTcxMTk0MTA4NH0",
-                "sig": "16R28mBW8B_S-4TKSoztae9Nhp5XNE_Ph1XMosQ4Aww",
-            },
-        ]
+        tests = [{"msg": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiIyMTQ3NDgzNjQ3In0",
+                  "sig": "Oz_lnbf2cpaM9RNPgyGISkb-OaK26An5UqaH2eR0LyQ",
+                  },
+                 {"msg": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MTE5NDEwODMsImV4cCI6MTcxMTk0MTA4NH0",
+                  "sig": "16R28mBW8B_S-4TKSoztae9Nhp5XNE_Ph1XMosQ4Aww",
+                  },
+                 ]
         for test in tests:
             with self.subTest(msg=test):
                 self.assertEqual(
@@ -130,7 +127,10 @@ class GetHS256SignatureStringTestCase(unittest.TestCase):
         key = self.key_256_bits_zeros
         self.assertEqual(
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.i_Ip9qvXLD9wBkTC4h0y6YzYGgt9j0KgPU4afAqN11c",
-            uut.get_JWT_str(key=key, header=header, payload=payload),
+            uut.get_JWT_str(
+                key=key,
+                header=header,
+                payload=payload),
         )
 
     def test_whitespace_is_removed(self):
@@ -141,7 +141,10 @@ class GetHS256SignatureStringTestCase(unittest.TestCase):
         key = self.key_256_bits_zeros
         self.assertEqual(
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.i_Ip9qvXLD9wBkTC4h0y6YzYGgt9j0KgPU4afAqN11c",
-            uut.get_JWT_str(key=key, header=header, payload=payload),
+            uut.get_JWT_str(
+                key=key,
+                header=header,
+                payload=payload),
         )
 
     def test_padding_is_removed(self):
@@ -153,7 +156,10 @@ class GetHS256SignatureStringTestCase(unittest.TestCase):
         key = self.key_256_bits_zeros
         self.assertEqual(
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImNyaXQiOlsiZXhwIl19.eyJleHAiOiIyMTQ3NDgzNjQ3In0.qkAb0eWeUfyZdO_afbLKKfl2lzin3zAaoKvbK4idgXs",
-            uut.get_JWT_str(key=key, header=header, payload=payload),
+            uut.get_JWT_str(
+                key=key,
+                header=header,
+                payload=payload),
         )
         #     THIS: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImNyaXQiOlsiZXhwIl19.eyJleHAiOiIyMTQ3NDgzNjQ3In0.qkAb0eWeUfyZdO_afbLKKfl2lzin3zAaoKvbK4idgXs
         # NOT THIS:
