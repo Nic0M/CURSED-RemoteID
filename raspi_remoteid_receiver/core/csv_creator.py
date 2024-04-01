@@ -402,6 +402,8 @@ class CSVCreatorThread(threading.Thread):
                     "Invalid barometric altitude, exceeds int16 value.",
                 )
                 baro_alt = -1000
+            elif baro_alt == 0:
+                baro_alt = -1000
             else:
                 # TODO: conversion in standard, based on observation,
                 #  drones may not be compliant

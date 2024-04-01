@@ -357,6 +357,27 @@ def setup_wifi_interface(logger: logging.Logger) -> tuple[str, str]:
     return phy_name, mon_name
 
 
+def setup_bluetooth_interface(logger: logging.Logger) -> str:
+    cmd = "tshark -D | awk '/nRF Sniffer/{print $2}'"
+    logger.info(f"Running command: {cmd}")
+    try:
+        output = subprocess.check_output(
+            cmd,
+            shell=True,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.error(f"Error: {exc}")
+        raise RuntimeError from exc
+    interfaces = output.split("\n")
+    bt_interface_name = interfaces[0]
+    if bt_interface_name == "":
+        raise RuntimeError("No nRF Sniffer interface detected")
+    logger.info(f"BT Interface Name: {bt_interface_name}")
+    return bt_interface_name
+
+
 def wifi_channel_sweeper(
         phy: str, mon: str, channel_queue: queue.Queue,
         sleep_event: threading.Event,
@@ -431,7 +452,11 @@ def main(
 
     if use_bt:
         # Try to set up Bluetooth interface
-        bt_interface_name = "bluetooth-monitor"  # TODO: add nRF name
+        try:
+            bt_interface_name = setup_bluetooth_interface(logger)
+        except Exception as e:
+            logger.critical(f"Error setting up Bluetooth interface: {e}")
+            return 1
         try:
             bt_interface_queue.put(bt_interface_name, block=False)
         except queue.Full:  # This shouldn't be possible
