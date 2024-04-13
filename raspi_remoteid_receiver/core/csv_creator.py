@@ -335,8 +335,16 @@ class CSVCreatorThread(threading.Thread):
         except AttributeError:
             raise MissingPacketFieldError("Missing Geodetic Altitude")
         else:
-            # Value should be an int
+            # height is expected to be 16-bit unsigned int which can be safely
+            # represented as a 32-bit signed int
             geo_alt = int(geo_alt)
+            # Perform inverse encoding from ASTM F3411-22a Table 6
+            geo_alt = geo_alt / 2 - 1000
+            # If value is not between -1000 and 31767.5, the number was not
+            # properly encoded as a 16 bit unsigned int
+            # use 0.001 as tolerance for floating point error
+            if not -1000.001 <= geo_alt <= 31767.501:
+                geo_alt = -1000
 
         # Geodetic Vertical Accuracy
         try:
@@ -395,19 +403,16 @@ class CSVCreatorThread(threading.Thread):
             # If Invalid, No Value, or Unknown => -1000 m
             baro_alt = -1000
         else:
+            # height is expected to be 16-bit unsigned int which can be safely
+            # represented as a 32-bit signed int
             baro_alt = int(baro_alt)
-            if baro_alt > 31767:  # 31767 is max 16-bit signed int 32767 - 1000
-                # This should not be possible
-                self.logger.warning(
-                    "Invalid barometric altitude, exceeds int16 value.",
-                )
+            # Perform inverse encoding from ASTM F3411-22a Table 6
+            baro_alt = baro_alt / 2 - 1000
+            # If value is not between -1000 and 31767.5, the number was not
+            # properly encoded as a 16 bit unsigned int
+            # use 0.001 as tolerance for floating point error
+            if not -1000.001 <= baro_alt <= 31767.501:
                 baro_alt = -1000
-            elif baro_alt == 0:
-                baro_alt = -1000
-            else:
-                # TODO: conversion in standard, based on observation,
-                #  drones may not be compliant
-                baro_alt = (baro_alt + 1000) / 2
 
         try:
             baro_alt_acc = opendroneid_data.opendroneid_loc_baroaccuracy
@@ -426,11 +431,16 @@ class CSVCreatorThread(threading.Thread):
             # Field is optional, don't throw error if missing
             height = -1000
         else:
+            # height is expected to be 16-bit unsigned int which can be safely
+            # represented as a 32-bit signed int
             height = int(height)
-            if not -1000 <= height <= 31767:  # see altitudes
+            # Perform inverse encoding from ASTM F3411-22a Table 6
+            height = height / 2 - 1000
+            # If value is not between -1000 and 31767.5, the number was not
+            # properly encoded as a 16 bit unsigned int
+            # use 0.001 as tolerance for floating point error
+            if not -1000.001 <= height <= 31767.501:
                 height = -1000
-            else:
-                height = (height + 1000) / 2
 
         try:
             height_type = opendroneid_data.opendroneid_loc_flag_heighttype
