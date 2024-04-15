@@ -225,6 +225,7 @@ def lambda_handler(event, context):
 
             remote_id_data_table = "remoteid_packets"
             drone_list_table = "drone_list"
+            active_table="active_flights"
 
             queried_packets = 0
             skipped_packets = 0
@@ -388,6 +389,24 @@ def lambda_handler(event, context):
                     except queue.Full:
                         skipped_packets += 1
                         continue
+                    sql_query=(
+                        f"INSERT INTO {active_table} ("
+                        f"src_addr, unique_id, lat, "
+                        f"lon, alt, gnd_speed, "
+                        f"vert_speed, heading, "
+                        f"startTime, currTime) "
+                        f"VALUES ("
+                        f"{src_addr:s}', '{unique_id:s}',{lat:.6f}, "
+                        f"{lon:.6f},{height},{gnd_speed:.2f}, "
+                        f"{vert_speed:.2f}, {heading:d},{timestamp:s}"
+                        f"{timestamp:s});"
+                    )
+                    try:
+                        sql_query_queue.put(sql_query, block=False)
+                    except queue.Full:
+                        logger.error("Failed to add Active Flights Query")
+                        skipped_packets += 1
+                        continue
                     prev_src_addr.append(src_addr)
 
                 sql_query = (
@@ -402,7 +421,7 @@ def lambda_handler(event, context):
                     f"{heading:d}, {gnd_speed:.2f}, {vert_speed:.2f}, "
                     f"{lat:.6f}, {lon:.6f}, {baro_alt}, {geo_alt}, "
                     f"{height}, {horz_acc}, {geo_vert_acc}, "
-                    f"{speed_acc})"
+                    f"{speed_acc});"
                 )
                 try:
                     sql_query_queue.put(sql_query, block=False)
@@ -428,6 +447,24 @@ def lambda_handler(event, context):
                 f") AS grouped ON s.src_addr = grouped.src_addr AND s.timestamp = grouped.latest_timestamp "  # noqa
                 f"ON DUPLICATE KEY UPDATE "
                 f"unique_id=VALUES(unique_id), lastTime=VALUES(lastTime);"
+            )
+            # fmt: on
+            try:
+                execute_query(sql_query, cur)
+            except RuntimeError:
+                logger.error("Failed to update current drone list table.")
+            else:
+                conn.commit()
+                
+                
+            sql_query = (
+                f"INSERT INTO {active_table} (src_addr, unique_id, lat,lon, alt, gnd_speed, vert_speed, heading, startTime, currTime)"
+                f"SELECT s.src_addr, s.unique_id, s.lat,s.lon,s.height,s.gnd_speed,s.vert_speed,s.heading,active_flights.startTime,MAX(s.timestamp) "
+                f"FROM {remote_id_data_table} s, {active_table}"
+                f"WHERE {active_table}.src_addr = s.src_addr and TIMESTAMPDIFF(second,s.timestamp,CURRENT_TIMESTAMP)<600"
+				f"GROUP BY s.src_addr"
+                f"ON DUPLICATE KEY UPDATE "
+                f"currTime=VALUES(currTime), lat=VALUES(lat),lon=VALUES(lon),gnd_speed=VALUES(gnd_speed),vert_speed=VALUES(vert_speed),heading=VALUES(heading);"
             )
             # fmt: on
             try:
