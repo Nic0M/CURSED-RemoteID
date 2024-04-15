@@ -225,7 +225,7 @@ def lambda_handler(event, context):
 
             remote_id_data_table = "remoteid_packets"
             drone_list_table = "drone_list"
-            active_table="active_flights"
+            active_table = "active_flights"
 
             queried_packets = 0
             skipped_packets = 0
@@ -389,7 +389,7 @@ def lambda_handler(event, context):
                     except queue.Full:
                         skipped_packets += 1
                         continue
-                    sql_query=(
+                    sql_query = (
                         f"INSERT INTO {active_table} ("
                         f"src_addr, unique_id, lat, "
                         f"lon, alt, gnd_speed, "
@@ -455,14 +455,13 @@ def lambda_handler(event, context):
                 logger.error("Failed to update current drone list table.")
             else:
                 conn.commit()
-                
-                
+
             sql_query = (
                 f"INSERT INTO {active_table} (src_addr, unique_id, lat,lon, alt, gnd_speed, vert_speed, heading, startTime, currTime)"
                 f"SELECT s.src_addr, s.unique_id, s.lat,s.lon,s.height,s.gnd_speed,s.vert_speed,s.heading,active_flights.startTime,MAX(s.timestamp) "
                 f"FROM {remote_id_data_table} s, {active_table}"
                 f"WHERE {active_table}.src_addr = s.src_addr and TIMESTAMPDIFF(second,s.timestamp,CURRENT_TIMESTAMP)<600"
-				f"GROUP BY s.src_addr"
+                f"GROUP BY s.src_addr"
                 f"ON DUPLICATE KEY UPDATE "
                 f"currTime=VALUES(currTime), lat=VALUES(lat),lon=VALUES(lon),gnd_speed=VALUES(gnd_speed),vert_speed=VALUES(vert_speed),heading=VALUES(heading);"
             )
