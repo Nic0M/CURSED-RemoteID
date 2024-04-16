@@ -32,22 +32,27 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
-import os, sys, traceback
+import os
+import sys
+import traceback
 import time
 import logging
 from SnifferAPI import Sniffer, UART, Logger, Pcap
 
+
 def setup():
     # Find connected sniffers
     ports = UART.find_sniffer()
-    
+
     if len(ports) > 0:
         # Initialize the sniffer on the first port found with baudrate 1000000.
-        # If you are using an old firmware version <= 2.0.0, simply remove the baudrate parameter here.
+        # If you are using an old firmware version <= 2.0.0, simply remove the
+        # baudrate parameter here.
         sniffer = Sniffer.Sniffer(portnum=ports[0], baudrate=1000000)
-    
+
     else:
         print("No sniffers found!")
         return
@@ -56,7 +61,6 @@ def setup():
     sniffer.start()
     # Scan for new advertisers
     sniffer.scan()
-
 
     for _ in range(10):
         time.sleep(1)
@@ -67,9 +71,13 @@ def setup():
             follow(sniffer, found_dev)
             break
 
+
 def follow(sniffer, dev):
     pipeFilePath = os.path.join(Logger.DEFAULT_LOG_FILE_DIR, "nordic_ble.pipe")
-    logging.info('###### Found dev %s. Start wireshark with -Y btle -k -i %s', dev, os.path.abspath(pipeFilePath))
+    logging.info(
+        '###### Found dev %s. Start wireshark with -Y btle -k -i %s',
+        dev,
+        os.path.abspath(pipeFilePath))
 
     myPipe = PcapPipe()
     myPipe.open_and_init(pipeFilePath)
@@ -78,10 +86,11 @@ def follow(sniffer, dev):
 
     try:
         loop(sniffer)
-    except:
+    except BaseException:
         pass
 
     myPipe.close()
+
 
 def loop(sniffer):
     nLoops = 0
@@ -90,13 +99,17 @@ def loop(sniffer):
     while True:
         time.sleep(0.1)
 
-        packets   = sniffer.getPackets()
-        nLoops   += 1
+        packets = sniffer.getPackets()
+        nLoops += 1
         nPackets += len(packets)
 
         if connected != sniffer.inConnection or nLoops % 20 == 0:
             connected = sniffer.inConnection
-            logging.info("connected %s, nPackets %s", sniffer.inConnection, nPackets)
+            logging.info(
+                "connected %s, nPackets %s",
+                sniffer.inConnection,
+                nPackets)
+
 
 class PcapPipe(object):
     def open_and_init(self, pipeFilePath):
@@ -109,26 +122,31 @@ class PcapPipe(object):
         self.write(Pcap.get_global_header())
 
     def write(self, message):
-        if not self._pipe: return
+        if not self._pipe:
+            return
         try:
             self._pipe.write(message)
             self._pipe.flush()
         except IOError:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            logger.error('Got exception trying to write to pipe: %s', exc_value)
+            logger.error(
+                'Got exception trying to write to pipe: %s',
+                exc_value)
             self.close()
 
     def close(self):
         logging.debug("closing pipe")
-        if not self._pipe: return
+        if not self._pipe:
+            return
         self._pipe.close()
         self._pipe = None
 
     def newBlePacket(self, notification):
         packet = notification.msg["packet"]
-        pcap_packet = Pcap.create_packet(bytes([packet.boardId] + packet.getList()),
-                                         packet.time)
+        pcap_packet = Pcap.create_packet(
+            bytes([packet.boardId] + packet.getList()), packet.time)
         self.write(pcap_packet)
+
 
 if __name__ == '__main__':
     logger = logging.getLogger()

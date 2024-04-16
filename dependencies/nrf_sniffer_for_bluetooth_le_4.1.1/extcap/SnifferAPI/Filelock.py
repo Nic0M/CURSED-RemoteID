@@ -14,7 +14,9 @@ from . import Exceptions
 # The naming convention which must be used is "LCK.." followed by the base name of the device.
 # For example, to lock /dev/ttyS0 the file "LCK..ttyS0" would be created.
 # HDB UUCP lock file format:
-# process identifier (PID) as a ten byte ASCII decimal number, with a trailing newline
+# process identifier (PID) as a ten byte ASCII decimal number, with a
+# trailing newline
+
 
 def lockpid(lockfile):
     if (os.path.isfile(lockfile)):
@@ -23,12 +25,13 @@ def lockpid(lockfile):
 
         try:
             return int(lockpid)
-        except:
+        except BaseException:
             logging.info("Lockfile is invalid. Overriding it..")
             os.remove(lockfile)
             return 0
 
     return 0
+
 
 def lock(port):
     if platform != 'linux':
@@ -51,6 +54,7 @@ def lock(port):
     fd = open(lockfile, 'w')
     with open(lockfile, 'w') as fd:
         fd.write(f'{os.getpid():10}')
+
 
 def unlock(port):
     if platform != 'linux':

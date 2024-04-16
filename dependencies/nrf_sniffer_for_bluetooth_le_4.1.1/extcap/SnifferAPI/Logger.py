@@ -32,10 +32,15 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 
-import time, os, logging, traceback, threading
+import time
+import os
+import logging
+import traceback
+import threading
 import logging.handlers as logHandlers
 
 #################################################################
@@ -50,7 +55,8 @@ import logging.handlers as logHandlers
 
 appdata = os.getenv('appdata')
 if appdata:
-    DEFAULT_LOG_FILE_DIR = os.path.join(appdata, 'Nordic Semiconductor', 'Sniffer', 'logs')
+    DEFAULT_LOG_FILE_DIR = os.path.join(
+        appdata, 'Nordic Semiconductor', 'Sniffer', 'logs')
 else:
     DEFAULT_LOG_FILE_DIR = "/tmp/logs"
 
@@ -75,7 +81,8 @@ def initLogger():
     try:
         global logFileName
         if logFileName is None:
-            logFileName = os.path.join(DEFAULT_LOG_FILE_DIR, DEFAULT_LOG_FILE_NAME)
+            logFileName = os.path.join(
+                DEFAULT_LOG_FILE_DIR, DEFAULT_LOG_FILE_NAME)
 
         # First, make sure that the directory exists
         if not os.path.isdir(os.path.dirname(logFileName)):
@@ -89,15 +96,18 @@ def initLogger():
         global logFlusher
         global logHandlerArray
 
-        logHandler = MyRotatingFileHandler(logFileName, mode='a', maxBytes=myMaxBytes, backupCount=3)
-        logFormatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%d-%b-%Y %H:%M:%S (%z)')
+        logHandler = MyRotatingFileHandler(
+            logFileName, mode='a', maxBytes=myMaxBytes, backupCount=3)
+        logFormatter = logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s',
+            datefmt='%d-%b-%Y %H:%M:%S (%z)')
         logHandler.setFormatter(logFormatter)
         logger = logging.getLogger()
         logger.addHandler(logHandler)
         logger.setLevel(logging.INFO)
         logFlusher = LogFlusher(logHandler)
         logHandlerArray.append(logHandler)
-    except:
+    except BaseException:
         print("LOGGING FAILED")
         print(traceback.format_exc())
         raise
@@ -113,18 +123,19 @@ def shutdownLogger():
 def clearLog():
     try:
         logHandler.doRollover()
-    except:
+    except BaseException:
         print("LOGGING FAILED")
         raise
 
 
-# Returns the timestamp residing on the first line of the logfile. Used for checking the time of creation
+# Returns the timestamp residing on the first line of the logfile. Used
+# for checking the time of creation
 def getTimestamp():
     try:
         with open(logFileName, "r") as f:
             f.seek(0)
             return f.readline()
-    except:
+    except BaseException:
         print("LOGGING FAILED")
 
 
@@ -132,7 +143,7 @@ def addTimestamp():
     try:
         with open(logFileName, "a") as f:
             f.write(str(time.time()) + os.linesep)
-    except:
+    except BaseException:
         print("LOGGING FAILED")
 
 
@@ -143,7 +154,7 @@ def readAll():
         with open(logFileName, "r") as f:
             text = f.read()
         return text
-    except:
+    except BaseException:
         print("LOGGING FAILED")
 
 
@@ -153,6 +164,7 @@ def addLogHandler(logHandler):
     logger.addHandler(logHandler)
     logger.setLevel(logging.INFO)
     logHandlerArray.append(logHandler)
+
 
 def removeLogHandler(logHandler):
     global logHandlerArray
@@ -167,7 +179,7 @@ class MyRotatingFileHandler(logHandlers.RotatingFileHandler):
             logHandlers.RotatingFileHandler.doRollover(self)
             addTimestamp()
             self.maxBytes = myMaxBytes
-        except:
+        except BaseException:
             # There have been permissions issues with the log files.
             self.maxBytes += int(myMaxBytes / 2)
 

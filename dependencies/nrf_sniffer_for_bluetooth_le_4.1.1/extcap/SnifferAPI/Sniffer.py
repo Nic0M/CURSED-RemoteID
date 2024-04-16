@@ -32,8 +32,13 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
+import threading
+import os
+import sys
+from . import SnifferCollector
 import logging
 from . import Logger
 from . import UART
@@ -41,7 +46,7 @@ from . import UART
 from .Types import *
 try:
     from .version import VERSION_STRING
-except:
+except BaseException:
     VERSION_STRING = "Unknown Version"
 
 
@@ -55,28 +60,29 @@ def initLog():
 initLog()
 
 
-
-import sys, os, threading
-from . import SnifferCollector
-
 class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
 
     # Sniffer constructor. portnum argument is optional. If not provided,
     # the software will try to locate the firwmare automatically (may take time).
     # NOTE: portnum is 0-indexed, while Windows names are 1-indexed
-    def __init__(self, portnum=None, baudrate=UART.SNIFFER_OLD_DEFAULT_BAUDRATE, **kwargs):
+    def __init__(
+            self,
+            portnum=None,
+            baudrate=UART.SNIFFER_OLD_DEFAULT_BAUDRATE,
+            **kwargs):
         threading.Thread.__init__(self)
-        SnifferCollector.SnifferCollector.__init__(self, portnum, baudrate=baudrate, **kwargs)
+        SnifferCollector.SnifferCollector.__init__(
+            self, portnum, baudrate=baudrate, **kwargs)
         self.daemon = True
 
         self.subscribe("COMPORT_FOUND", self.comPortFound)
 
     # API STARTS HERE
 
-
     # Get [number] number of packets since last fetch (-1 means all)
     # Note that the packet buffer is limited to about 80000 packets.
     # Returns: A list of Packet objects
+
     def getPackets(self, number=-1):
         return self._getPackets(number)
 
@@ -93,8 +99,17 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
     # "device" argument is of type Device
     # if "followOnlyAdvertisements" is True, the sniffer will not follow the device into a connection.
     # Returns nothing
-    def follow(self, device=None, followOnlyAdvertisements = False, followOnlyLegacy = False, followCoded = False):
-        self._startFollowing(device, followOnlyAdvertisements, followOnlyLegacy, followCoded)
+    def follow(
+            self,
+            device=None,
+            followOnlyAdvertisements=False,
+            followOnlyLegacy=False,
+            followCoded=False):
+        self._startFollowing(
+            device,
+            followOnlyAdvertisements,
+            followOnlyLegacy,
+            followCoded)
 
     # Clear the list of devices
     def clearDevices(self):
@@ -103,7 +118,7 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
     # Signal the Sniffer to scan for advertising devices by sending the REQ_SCAN_CONT UART packet.
     # This will cause it to stop sniffing any device it is sniffing at the moment.
     # Returns nothing.
-    def scan(self, findScanRsp = False, findAux = False, scanCoded = False):
+    def scan(self, findScanRsp=False, findAux=False, scanCoded=False):
         self._startScanning(findScanRsp, findAux, scanCoded)
 
     # Send a temporary key to the sniffer to use when decrypting encrypted communication.
@@ -132,7 +147,8 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
     # Send a request for the sniffer version in the sniffer firmware.
     def getFirmwareVersion(self):
         self._packetReader.sendVersionReq()
-        # Older versions of the firmware send the version in the PING response packet.
+        # Older versions of the firmware send the version in the PING response
+        # packet.
         self._packetReader.sendPingReq()
 
     def getTimestamp(self):
@@ -165,12 +181,14 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
     # NOTE: Methods with decorator @property can be used as (read-only) properties
     # Example: mMissedPackets = sniffer.missedPackets
 
-    # The number of missed packets over the UART, as determined by the packet counter in the header.
+    # The number of missed packets over the UART, as determined by the packet
+    # counter in the header.
     @property
     def missedPackets(self):
         return self._missedPackets
 
-    # The number of packets which were sniffed in the last BLE connection. From CONNECT_REQ until link loss/termination.
+    # The number of packets which were sniffed in the last BLE connection.
+    # From CONNECT_REQ until link loss/termination.
     @property
     def packetsInLastConnection(self):
         return self._packetsInLastConnection
@@ -190,12 +208,14 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
     def inConnection(self):
         return self._inConnection
 
-    # The internal state of the sniffer. States are defined in SnifferCollector module. Valid values are 0-2.
+    # The internal state of the sniffer. States are defined in
+    # SnifferCollector module. Valid values are 0-2.
     @property
     def state(self):
         return self._state
 
-    # The COM port of the sniffer hardware. During initialization, this value is a preset.
+    # The COM port of the sniffer hardware. During initialization, this value
+    # is a preset.
     @property
     def portnum(self):
         return self._portnum
@@ -221,10 +241,12 @@ class Sniffer(threading.Thread, SnifferCollector.SnifferCollector):
             _, _, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             lineno = exc_tb.tb_lineno
-            logging.info("exiting ("+str(type(e))+" in "+fname+" at "+str(lineno)+"): "+str(e))
+            logging.info("exiting (" + str(type(e)) + " in " +
+                         fname + " at " + str(lineno) + "): " + str(e))
             self.goodExit = False
         except (BrokenPipeError, OSError):
-            logging.info("capture pipe closed before sniffer thread was stopped")
+            logging.info(
+                "capture pipe closed before sniffer thread was stopped")
             self.goodExit = True
         except Exception as e:
             import traceback

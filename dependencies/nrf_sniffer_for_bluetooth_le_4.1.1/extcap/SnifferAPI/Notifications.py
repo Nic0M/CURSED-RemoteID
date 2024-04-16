@@ -32,23 +32,28 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 
-import threading, logging
+import threading
+import logging
+
 
 class Notification():
-    def __init__(self, key, msg = None):
+    def __init__(self, key, msg=None):
         if type(key) is not str:
-            raise TypeError("Invalid notification key: "+str(key))
+            raise TypeError("Invalid notification key: " + str(key))
         self.key = key
         self.msg = msg
 
     def __repr__(self):
-        return "Notification (key: %s, msg: %s)" % (str(self.key), str(self.msg))
+        return "Notification (key: %s, msg: %s)" % (
+            str(self.key), str(self.msg))
+
 
 class Notifier():
-    def __init__(self, callbacks = [], **kwargs):
+    def __init__(self, callbacks=[], **kwargs):
         self.callbacks = {}
         self.callbackLock = threading.RLock()
 
@@ -75,10 +80,10 @@ class Notifier():
                 self.callbacks[key] = []
             return self.callbacks[key]
 
-    def notify(self, key = None, msg = None, notification = None):
+    def notify(self, key=None, msg=None, notification=None):
         with self.callbackLock:
-            if notification == None:
-                notification = Notification(key,msg)
+            if notification is None:
+                notification = Notification(key, msg)
 
             for callback in self.getCallbacks(notification.key):
                 callback(notification)
@@ -87,4 +92,4 @@ class Notifier():
                 callback(notification)
 
     def passOnNotification(self, notification):
-        self.notify(notification = notification)
+        self.notify(notification=notification)

@@ -32,7 +32,8 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 import collections
 import logging
@@ -61,7 +62,11 @@ def find_sniffer(write_data=False):
     for port in [x.device for x in open_ports]:
         for rate in SNIFFER_BAUDRATES:
             reader = None
-            l_errors = [serial.SerialException, ValueError, Exceptions.LockedException, OSError]
+            l_errors = [
+                serial.SerialException,
+                ValueError,
+                Exceptions.LockedException,
+                OSError]
             if os.name == 'posix':
                 l_errors.append(termios.error)
             try:
@@ -73,7 +78,8 @@ def find_sniffer(write_data=False):
                     else:
                         _ = reader.decodeFromSLIP(0.3, complete_timeout=0.3)
 
-                    # FIXME: Should add the baud rate here, but that will be a breaking change
+                    # FIXME: Should add the baud rate here, but that will be a
+                    # breaking change
                     sniffers.append(port)
                     break
                 except (Exceptions.SnifferTimeout, Exceptions.UARTPacketError):
@@ -98,7 +104,8 @@ def find_sniffer_baudrates(port, write_data=False):
                 else:
                     _ = reader.decodeFromSLIP(0.3, complete_timeout=0.3)
 
-                # TODO: possibly include additional rates based on protocol version
+                # TODO: possibly include additional rates based on protocol
+                # version
                 return {"default": rate, "other": []}
             except (Exceptions.SnifferTimeout, Exceptions.UARTPacketError):
                 pass
@@ -149,7 +156,7 @@ class Uart:
             try:
                 # Read any data available, or wait for at least one byte
                 data_read = self.ser.read(self.ser.in_waiting or 1)
-                #logging.info('type: {}'.format(data_read.__class__))
+                # logging.info('type: {}'.format(data_read.__class__))
                 self._read_queue_extend(data_read)
             except serial.SerialException as e:
                 logging.info("Unable to read UART: %s" % e)
@@ -216,6 +223,7 @@ class Uart:
 def list_serial_ports():
     # Scan for available ports.
     return list_ports.comports()
+
 
 if __name__ == "__main__":
     import time

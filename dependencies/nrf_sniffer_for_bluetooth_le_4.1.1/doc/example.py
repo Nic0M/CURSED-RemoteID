@@ -32,7 +32,8 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 import time
 from SnifferAPI import Sniffer, UART
@@ -40,21 +41,23 @@ from SnifferAPI import Sniffer, UART
 nPackets = 0
 mySniffer = None
 
+
 def setup():
     global mySniffer
-    
+
     # Find connected sniffers
     ports = UART.find_sniffer()
-    
+
     if len(ports) > 0:
         # Initialize the sniffer on the first COM port found with baudrate 1000000.
-        # If you are using an old firmware version <= 2.0.0, simply remove the baudrate parameter here.
+        # If you are using an old firmware version <= 2.0.0, simply remove the
+        # baudrate parameter here.
         mySniffer = Sniffer.Sniffer(portnum=ports[0], baudrate=1000000)
-    
+
     else:
         print("No sniffers found!")
         return
-    
+
     # Start the sniffer module. This call is mandatory.
     mySniffer.start()
     # Scan for new advertisers
@@ -66,12 +69,14 @@ def setup():
     d = mySniffer.getDevices()
     # Find device with name "Example".
     dev = d.find('Example')
-    
+
     if dev is not None:
-        # Follow (sniff) device "Example". This call sends a REQ_FOLLOW command over UART.
+        # Follow (sniff) device "Example". This call sends a REQ_FOLLOW command
+        # over UART.
         mySniffer.follow(dev)
     else:
         print("Could not find device")
+
 
 def loop():
     # Enter main loop
@@ -80,11 +85,11 @@ def loop():
         time.sleep(0.1)
         # Get (pop) unprocessed BLE packets.
         packets = mySniffer.getPackets()
-        
-        processPackets(packets) # function defined below
-        
+
+        processPackets(packets)  # function defined below
+
         nLoops += 1
-        
+
         # print diagnostics every so often
         if nLoops % 20 == 0:
             print(mySniffer.getDevices())
@@ -93,8 +98,10 @@ def loop():
             print("packetsInLastConnection", mySniffer.packetsInLastConnection)
             print("nPackets", nPackets)
             print()
-        
+
 # Takes list of packets
+
+
 def processPackets(packets):
     for packet in packets:
         # packet is of type Packet
@@ -103,7 +110,8 @@ def processPackets(packets):
         # if packet.OK:
         # Counts number of packets which are not malformed.
         nPackets += 1
-    
+
+
 setup()
 if mySniffer is not None:
     loop()

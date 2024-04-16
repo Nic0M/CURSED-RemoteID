@@ -32,29 +32,38 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 
 class SnifferTimeout(Exception):
     pass
 
+
 class UARTPacketError(Exception):
     pass
+
 
 class LockedException(Exception):
     def __init__(self, message):
         self.message = message
 
+
 class InvalidPacketException(Exception):
     pass
+
 
 class InvalidAdvChannel(Exception):
     pass
 
 # Internal Use
+
+
 class SnifferWatchDogTimeout(SnifferTimeout):
     pass
 
 # Internal Use
+
+
 class ExitCodeException(Exception):
     pass

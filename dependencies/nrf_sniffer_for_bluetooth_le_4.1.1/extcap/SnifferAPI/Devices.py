@@ -34,10 +34,13 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 from . import Notifications
-import logging, threading
+import logging
+import threading
+
 
 class DeviceList(Notifications.Notifier):
     def __init__(self, *args, **kwargs):
@@ -52,7 +55,7 @@ class DeviceList(Notifications.Notifier):
         return len(self.devices)
 
     def __repr__(self):
-        return "Sniffer Device List: "+str(self.asList())
+        return "Sniffer Device List: " + str(self.asList())
 
     def clear(self):
         logging.info("Clearing")
@@ -64,16 +67,19 @@ class DeviceList(Notifications.Notifier):
         with self._deviceListLock:
             existingDevice = self.find(newDevice)
 
-            # Add device to the list of devices being displayed, but only if CRC is OK
-            if existingDevice == None:
+            # Add device to the list of devices being displayed, but only if
+            # CRC is OK
+            if existingDevice is None:
                 self.append(newDevice)
             else:
                 updated = False
-                if (newDevice.name != "\"\"") and (existingDevice.name == "\"\""):
+                if (newDevice.name != "\"\"") and (
+                    existingDevice.name == "\"\""):
                     existingDevice.name = newDevice.name
                     updated = True
 
-                if (newDevice.RSSI != 0 and (existingDevice.RSSI < (newDevice.RSSI - 5)) or (existingDevice.RSSI > (newDevice.RSSI+2))):
+                if (newDevice.RSSI != 0 and (existingDevice.RSSI < (
+                    newDevice.RSSI - 5)) or (existingDevice.RSSI > (newDevice.RSSI + 2))):
                     existingDevice.RSSI = newDevice.RSSI
                     updated = True
 
@@ -85,27 +91,27 @@ class DeviceList(Notifications.Notifier):
         self.notify("DEVICE_ADDED", device)
 
     def find(self, id):
-        if type(id) == list:
-            for dev in self.devices:
+
+
+if isinstance(id,         if)            for dev in self.devices:
                 if dev.address == id:
                     return dev
-        elif type(id) == int:
-            return self.devices[id]
-        elif type(id) == str:
-            for dev in self.devices:
-                if dev.name in [id, '"'+id+'"']:
+elif isinstance(id,         elif)            return self.devices[id]
+elif isinstance(id,         elif)            for dev in self.devices:
+                if dev.name in [id, '"' + id + '"']:
                     return dev
         elif id.__class__.__name__ == "Device":
             return self.find(id.address)
         return None
 
     def remove(self, id):
-        if type(id) == list: #address
+        if type(id) == list:  # address
             device = self.devices.pop(self.devices.index(self.find(id)))
-        elif type(id) == int:
-            device = self.devices.pop(id)
-        elif type(id) == Device:
-            device = self.devices.pop(self.devices.index(self.find(id.address)))
+elif isinstance(id,         elif )            device = self.devices.pop(id)
+elif isinstance(id,         elif )            device = self.devices.pop(
+    self.devices.index(
+        self.find(
+            id.address)))
         self.notify("DEVICE_REMOVED", device)
 
     def index(self, device):
@@ -126,6 +132,7 @@ class DeviceList(Notifications.Notifier):
     def asList(self):
         return self.devices[:]
 
+
 class Device:
     def __init__(self, address, name, RSSI):
         self.address = address
@@ -134,10 +141,11 @@ class Device:
         self.followed = False
 
     def __repr__(self):
-        return 'Bluetooth LE device "'+self.name+'" ('+str(self.address)+')'
+        return 'Bluetooth LE device "' +self.name+'" ('+str(self.address)+')'
+
 
 def listToString(list):
     str = ""
     for i in list:
-        str+=chr(i)
+        str += chr(i)
     return str

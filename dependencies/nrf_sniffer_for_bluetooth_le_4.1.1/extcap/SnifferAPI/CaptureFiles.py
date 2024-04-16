@@ -32,10 +32,13 @@
 # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 
 
-import time, os, logging
+import time
+import os
+import logging
 from . import Logger
 from . import Pcap
 
@@ -45,7 +48,9 @@ DEFAULT_CAPTURE_FILE_NAME = "capture.pcap"
 
 
 def get_capture_file_path(capture_file_path=None):
-    default_path = os.path.join(DEFAULT_CAPTURE_FILE_DIR, DEFAULT_CAPTURE_FILE_NAME)
+    default_path = os.path.join(
+        DEFAULT_CAPTURE_FILE_DIR,
+        DEFAULT_CAPTURE_FILE_NAME)
     if capture_file_path is None:
         return default_path
     if os.path.splitext(capture_file_path)[1] != ".pcap":
@@ -59,13 +64,13 @@ class CaptureFileHandler:
         if not os.path.isdir(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         self.filename = filename
-        self.backupFilename = self.filename+".1"
+        self.backupFilename = self.filename + ".1"
         if not os.path.isfile(self.filename):
             self.startNewFile()
         elif os.path.getsize(self.filename) > 20000000:
             self.doRollover()
         if clear:
-            #clear file
+            # clear file
             self.startNewFile()
 
     def startNewFile(self):
@@ -75,12 +80,12 @@ class CaptureFileHandler:
     def doRollover(self):
         try:
             os.remove(self.backupFilename)
-        except:
+        except BaseException:
             logging.exception("capture file rollover remove backup failed")
         try:
             os.rename(self.filename, self.backupFilename)
             self.startNewFile()
-        except:
+        except BaseException:
             logging.exception("capture file rollover failed")
 
     def writePacket(self, packet):
