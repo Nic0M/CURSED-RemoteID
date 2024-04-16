@@ -45,7 +45,7 @@ sudo apt install tshark
 ```
 Now copy the Open Drone ID .lua script from the git repository to the Wireshark plugins folder.
 ```shell
-cp ~/CURSED-RemoteID/opendroneid-dissector.lua ~/.local/lib/wireshark/plugins/
+cp ~/CURSED-RemoteID/dependencies/opendroneid-dissector.lua ~/.local/lib/wireshark/plugins/
 ```
 Install `iw` if not already installed with your Linux distribution.
 ```shell
@@ -55,6 +55,15 @@ Install aircrack-ng, we specifically need `airmon-ng` from it.
 ```shell
 sudo apt install aircrack-ng
 ```
+
+## Install nRF Sniffer software
+To get the latest version of nRF Sniffer, follow the instructions for [nRF Sniffer for Bluetooth LE](https://www.nordicsemi.com/Products/Development-tools/nrf-sniffer-for-bluetooth-le/download#infotabs).
+Otherwise, copy the extcap folder and profile folder into the personal wireshark folder.
+```shell
+cp -r ~/CURSED-RemoteID/dependencies/nrf_sniffer_for_bluetooth_le_4.1.1/extcap/ ~/.config/wireshark/extcap/
+cp -r ~/CURSED-RemoteID/dependencies/nrf_sniffer_for_bluetooth_le_4.1.1/Profile_nRF_Sniffer_Bluetooth_LE ~/.local/lib/wireshark/
+```
+
 
 ## Add AWS Credentials
 Skip this step if saving files locally.
