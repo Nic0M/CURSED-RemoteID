@@ -198,7 +198,8 @@ class PacketLoggerProcess(multiprocessing.Process):
     def manual_packet_capture(self):
         while True:
             file_name = str(uuid.uuid4()) + ".pcap"
-            cmd = f"tshark -i 12 -Y 'opendroneid' -w '/tmp/{file_name}' -a duration:5"
+            cmd = f"tshark -i 12 -Y 'opendroneid' -w '/tmp/{
+                file_name}' -a duration:5"
             self.logger.info(f"Running command: {cmd}")
             try:
                 output = subprocess.check_output(
