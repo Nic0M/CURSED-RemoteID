@@ -41,10 +41,24 @@ pip install -r requirements.txt
 ## Install utilities
 Install the command-line version of Wireshark `tshark`.
 ```shell
+sudo apt install wireshark
+```
+Select Yes to allow non-superusers to capture packets.
+Then add current user to wireshark and dialout group
+```shell
+sudo usermod -a -G wireshark $USER
+sudo usermod -a -G dialout $USER
+```
+Make sure to reboot to apply these changes
+```shell
+sudo reboot
+```
+```shell
 sudo apt install tshark
 ```
 Now copy the Open Drone ID .lua script from the git repository to the Wireshark plugins folder.
 ```shell
+mkdir -p ~/.local/lib/wireshark/plugins
 cp ~/CURSED-RemoteID/dependencies/opendroneid-dissector.lua ~/.local/lib/wireshark/plugins/
 ```
 Install `iw` if not already installed with your Linux distribution.
@@ -60,8 +74,14 @@ sudo apt install aircrack-ng
 To get the latest version of nRF Sniffer, follow the instructions for [nRF Sniffer for Bluetooth LE](https://www.nordicsemi.com/Products/Development-tools/nrf-sniffer-for-bluetooth-le/download#infotabs).
 Otherwise, copy the extcap folder and profile folder into the personal wireshark folder.
 ```shell
+mkdir ~/.config/wireshark/extcap/
+# TODO FIX THIS COMMAND COPYING EXTRA DIRECTORY
 cp -r ~/CURSED-RemoteID/dependencies/nrf_sniffer_for_bluetooth_le_4.1.1/extcap/ ~/.config/wireshark/extcap/
 cp -r ~/CURSED-RemoteID/dependencies/nrf_sniffer_for_bluetooth_le_4.1.1/Profile_nRF_Sniffer_Bluetooth_LE ~/.local/lib/wireshark/
+```
+```shell
+cd ~/CURSED-RemoteID/dependencies/nrf_sniffer_for_bluetooth_le_4.1.1/extcap
+pip install -r requirements.txt
 ```
 
 

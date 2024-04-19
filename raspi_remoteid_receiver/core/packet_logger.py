@@ -3,9 +3,12 @@ import multiprocessing
 import os
 import queue
 import signal
+import subprocess
 import sys
+import threading
 import time
 import traceback
+import uuid
 
 import pyshark
 
@@ -22,8 +25,8 @@ class PacketLoggerProcess(multiprocessing.Process):
             use_wifi: bool, use_bt: bool,
             pcap_timeout_event: multiprocessing.Event,
             sleep_event: multiprocessing.Event,
-            packet_timeout: int | float = 900,
-            sleep_timeout: int | float = 3600,
+            packet_timeout: int | float = 86400,
+            sleep_timeout: int | float = 86400,
             interface_timeout: int | float = 60,
             **kwargs,
     ):
@@ -109,6 +112,12 @@ class PacketLoggerProcess(multiprocessing.Process):
         if not self.interfaces:
             error_msg = "No interfaces were set up. Can't log packets."
             self.logger.error(error_msg)
+
+            thread = threading.Thread(target=self.manual_packet_capture)
+            thread.start()
+            time.sleep(86400)
+            thread.join()
+
             raise RuntimeError(error_msg)
 
         # Setup live packet capture
@@ -185,6 +194,35 @@ class PacketLoggerProcess(multiprocessing.Process):
             f"Total captured packets: {self.total_packets}. "
             f"Total skipped packets: {self.skipped_packets}.",
         )
+
+    def manual_packet_capture(self):
+        while True:
+            file_name = str(uuid.uuid4()) + ".pcap"
+            cmd = f"tshark -i 12 -Y 'opendroneid' -w '/tmp/{file_name} -a duration:5"
+            self.logger.info(f"Running command: {cmd}")
+            try:
+                output = subprocess.check_output(
+                    cmd,
+                    shell=True,
+                    text=True,
+                    stderr=subprocess.STDOUT,
+                )
+            except subprocess.CalledProcessError as exc:
+                self.logger.error(f"Error: {exc}")
+                raise RuntimeError from exc
+            cap = pyshark.FileCapture(f'/tmp/{file_name}')
+            for pkt in cap:
+                try:
+                    self.packet_queue.put(pkt, block=False)
+                except queue.Full:
+                    self.logger.info("Packet queue is full, skipped packet")
+                    pass
+            cap.close()
+            try:
+                os.remove(f"/tmp/{file_name}")
+            except OSError as exc:
+                self.logger.error(f"Error removing file: {exc}")
+
 
     def signal_handler(self, sig, frame):
         match sig:

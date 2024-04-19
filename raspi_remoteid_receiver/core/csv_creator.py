@@ -66,9 +66,9 @@ class CSVCreatorThread(threading.Thread):
             sleep_event: threading.Event,
             sigint_event: threading.Event,
             max_packet_count: int = 100,
-            max_elapsed_time: int | float = 300,  # 5 minutes
+            max_elapsed_time: int | float = 30,  # 30 seconds
             upload_file_queue_timeout: int = 5,  # 5 seconds
-            packet_timeout: int = 120,  # 2 minutes of no Open Drone ID packets
+            packet_timeout: int = 86400,  # 2 minutes of no Open Drone ID packets
             **kwargs,
     ) -> None:
         super().__init__(**kwargs)

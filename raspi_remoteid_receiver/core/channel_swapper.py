@@ -358,7 +358,7 @@ def setup_wifi_interface(logger: logging.Logger) -> tuple[str, str]:
 
 
 def setup_bluetooth_interface(logger: logging.Logger) -> str:
-    cmd = "tshark -D | awk '/nRF Sniffer/{print $2}'"
+    cmd = "tshark -D 2>/var/tmp/BTerr.log | awk '/nRF Sniffer/{print $2}'"
     logger.info(f"Running command: {cmd}")
     try:
         output = subprocess.check_output(

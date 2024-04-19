@@ -287,6 +287,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--no-check-requirements", action="store_true",
     )
+    parser.add_argument(
+        "--tshark-capture", type=int, default=-1,
+        help="use custom tshark capture with interface number from output of tshark -D",
+    )
 
     args = parser.parse_args()
 
