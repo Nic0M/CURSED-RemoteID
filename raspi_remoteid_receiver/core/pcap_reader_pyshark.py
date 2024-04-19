@@ -12,9 +12,9 @@ import calendar  # included
 
 while True:
     # if (glob.glob('D:\\Engineering\\Senior_Projects_Example_Data\\full_packet_capture_*.pcapng') != []):
-        # path = glob.glob(
-            # 'D:\\Engineering\\Senior_Projects_Example_Data\\full_packet_capture_*.pcapng')[0]
-    for path in  glob.glob("/tmp/*.pcapng"):
+    # path = glob.glob(
+    # 'D:\\Engineering\\Senior_Projects_Example_Data\\full_packet_capture_*.pcapng')[0]
+    for path in glob.glob("/tmp/*.pcapng"):
         # path = glob.glob("/tmp/*.pcapng")[0]
         print(f"Using file {path}")
         pcap = pyshark.FileCapture(
