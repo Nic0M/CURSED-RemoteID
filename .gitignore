@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+[Ll]ogs/
+__pycache__/
+*.py[cod]     # Will match .pyc, .pyo and .pyd files.
+/lambda_src/lambda_insert_into_database/packages/

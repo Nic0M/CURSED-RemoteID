@@ -1,0 +1,46 @@
+---
+name: PEP-8 Auto-Formatter
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  autopep8:
+    if: ${{ github.actor != 'github-actions[bot]' && github.event_name != 'push' || github.event.pusher.name != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout last commit
+        uses: actions/checkout@v4
+
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install autopep8
+        run: pip install autopep8
+
+      - name: Apply autopep8
+        id: apply-autopep8
+        run: |
+          autopep8 --in-place --recursive --aggressive --verbose . 2>&1 | tee changelist.txt
+          if git diff --quiet; then
+            echo "No changes were made"
+          else
+            date > generated.txt
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add .
+            git restore --staged changelist.txt
+            git commit -m "Auto-formatted files for PEP-8 compliance" -m "$(cat changelist.txt)"
+            git push
+          fi
+        continue-on-error: true
+...
